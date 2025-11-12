@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.99;109-183;lombok.javac.handlers.HandleEqualsAndHashCode.generateMethods(Node, Node, List, boolean, boolean);110-184;lombok.javac.handlers.HandleEqualsAndHashCode.generateMethods(Node, Node, List, boolean, boolean, boolean)

@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.86;145-154;org.elasticsearch.search.aggregations.metrics.stats.extended.InternalExtendedStats.reduce(ReduceContext);148-158;org.elasticsearch.search.aggregations.metrics.stats.extended.InternalExtendedStats.doReduce(ReduceContext)
+Change Constructor Signature;constructor;0.98;69-74;org.elasticsearch.search.aggregations.metrics.stats.extended.InternalExtendedStats.InternalExtendedStats(String, long, double, double, double, double, double, ValueFormatter, Map);71-77;org.elasticsearch.search.aggregations.metrics.stats.extended.InternalExtendedStats.InternalExtendedStats(String, long, double, double, double, double, double, ValueFormatter, List, Map)

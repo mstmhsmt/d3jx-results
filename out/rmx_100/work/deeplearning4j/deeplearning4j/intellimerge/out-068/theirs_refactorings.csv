@@ -1,0 +1,7 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.9;511-519;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.computeZ(INDArray);513-521;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.computeZ(INDArray, boolean)
+Change Method Signature;method;0.86;455-464;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.zFromPrevLayer(int, INDArray);456-466;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.zFromPrevLayer(int, INDArray, boolean)
+Change Method Signature;method;0.8;490-504;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.computeZ();492-506;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.computeZ(boolean)
+Change Method Signature;method;0.73;1442-1444;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.setScore();1456-1458;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.computeGradientAndScore()
+Change Method Signature;method;0.93;473-482;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.activationFromPrevLayer(int, INDArray);475-484;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.activationFromPrevLayer(int, INDArray, boolean)
+Change Method Signature;method;0.96;567-596;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.feedForwardActivationsAndDerivatives();569-598;org.deeplearning4j.nn.multilayer.MultiLayerNetwork.feedForwardActivationsAndDerivatives(boolean)

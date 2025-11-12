@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.73;178-204;com.google.android.exoplayer2.demo.EventLogger.onMetadata(List);181-217;com.google.android.exoplayer2.demo.EventLogger.onMetadata(Metadata)

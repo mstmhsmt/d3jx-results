@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.96;82-98;lombok.javac.handlers.HandleLog.createField(LoggingFramework, JavacNode, JCFieldAccess, JCTree);89-105;lombok.javac.handlers.HandleLog.createField(LoggingFramework, JavacNode, JCFieldAccess, JCTree, String, boolean)

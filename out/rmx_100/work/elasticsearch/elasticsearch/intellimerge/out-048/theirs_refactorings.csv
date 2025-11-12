@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.95;1293-1315;org.elasticsearch.cluster.metadata.MetadataCreateIndexService.clusterStateCreateIndex(ClusterState, IndexMetadata, BiConsumer, ShardRoutingRoleStrategy);1308-1334;org.elasticsearch.cluster.metadata.MetadataCreateIndexService.clusterStateCreateIndex(ClusterState, IndexMetadata, BiConsumer, ClusterBlocksTransformer, ShardRoutingRoleStrategy)

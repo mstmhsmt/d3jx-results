@@ -1,0 +1,144 @@
+package org.apache.cassandra.streaming;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import com.google.common.base.Preconditions;
+import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.apache.cassandra.concurrent.NamedThreadFactory;
+import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.schema.TableId;
+import org.apache.cassandra.io.sstable.SSTable;
+import org.apache.cassandra.utils.JVMStabilityInspector;
+
+/**
+ * Task that manages receiving files for the session for certain ColumnFamily.
+ */
+public class StreamReceiveTask extends StreamTask {
+  private static final Logger logger = LoggerFactory.getLogger(StreamReceiveTask.class);
+
+  private static final ExecutorService executor = Executors.newCachedThreadPool(new NamedThreadFactory("StreamReceiveTask"));
+
+  private final StreamReceiver receiver;
+
+  private final int totalStreams;
+
+  private final long totalSize;
+
+  private volatile boolean done = false;
+
+  private int remoteStreamsReceived = 0;
+
+  private long bytesReceived = 0;
+
+  public StreamReceiveTask(StreamSession session, TableId tableId, int totalStreams, long totalSize) {
+    super(session, tableId);
+    this.receiver = ColumnFamilyStore.getIfExists(tableId).getStreamManager().createStreamReceiver(session, totalStreams);
+    this.totalStreams = totalStreams;
+    this.totalSize = totalSize;
+  }
+
+  /**
+     * Process received stream.
+     *
+     * @param stream Stream received.
+     */
+  public synchronized void received(IncomingStream stream) {
+    Preconditions.checkState(!session.isPreview(), "we should never receive sstables when previewing");
+    if (done) {
+      logger.warn("[{}] Received stream {} on already finished stream received task. Aborting stream.", session.planId(), stream.getName());
+      receiver.discardStream(stream);
+      return;
+    }
+    remoteStreamsReceived++;
+    bytesReceived += stream.getSize();
+    Preconditions.checkArgument(tableId.equals(stream.getTableId()));
+    logger.debug("received {} of {} total files {} of total bytes {}", remoteStreamsReceived, totalStreams, bytesReceived, totalSize);
+    receiver.received(stream);
+    if (remoteStreamsReceived == totalStreams) {
+      done = true;
+      executor.submit(new OnCompletionRunnable(this));
+    }
+  }
+
+  public int getTotalNumberOfFiles() {
+    return totalStreams;
+  }
+
+  public long getTotalSize() {
+    return totalSize;
+  }
+
+  public synchronized StreamReceiver getReceiver() {
+    if (done) {
+      throw new RuntimeException(String.format("Stream receive task %s of cf %s already finished.", session.planId(), tableId));
+    }
+    return receiver;
+  }
+
+  /**
+     * @return a LifecycleNewTracker whose operations are synchronised on this StreamReceiveTask.
+     */
+  public synchronized LifecycleNewTracker createLifecycleNewTracker() {
+    if (done) {
+      throw new RuntimeException(String.format("Stream receive task %s of cf %s already finished.", session.planId(), cfId));
+    }
+    return new LifecycleNewTracker() {
+      @Override public void trackNew(SSTable table) {
+        synchronized (StreamReceiveTask.this) {
+          txn.trackNew(table);
+        }
+      }
+
+      @Override public void untrackNew(SSTable table) {
+        synchronized (StreamReceiveTask.this) {
+          txn.untrackNew(table);
+        }
+      }
+
+      public OperationType opType() {
+        return txn.opType();
+      }
+    };
+  }
+
+  private static class OnCompletionRunnable implements Runnable {
+    private final StreamReceiveTask task;
+
+    public OnCompletionRunnable(StreamReceiveTask task) {
+      this.task = task;
+    }
+
+    public void run() {
+      try {
+        if (ColumnFamilyStore.getIfExists(task.tableId) == null) {
+          task.receiver.abort();
+          task.session.taskCompleted(task);
+          return;
+        }
+        task.receiver.finished();
+        ;
+        task.session.taskCompleted(task);
+      } catch (Throwable t) {
+        JVMStabilityInspector.inspectThrowable(t);
+        task.session.onError(t);
+      } finally {
+        task.receiver.cleanup();
+      }
+    }
+  }
+
+  /**
+     * Abort this task.
+     * If the task already received all files and
+     * {@link org.apache.cassandra.streaming.StreamReceiveTask.OnCompletionRunnable} task is submitted,
+     * then task cannot be aborted.
+     */
+  public synchronized void abort() {
+    if (done) {
+      return;
+    }
+    done = true;
+    receiver.abort();
+  }
+}

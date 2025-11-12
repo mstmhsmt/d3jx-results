@@ -1,0 +1,1 @@
+<xdd:delta xmlns:xdd="http://codinuum.com/diffts/delta/" xdd:reversible="false" xdd:normalized="false" xdd:lang="java" xdd:digest="MD5_a9df82158911c706ef19fea486571d39" xdd:digest_=""><xdd:move xdd:mid="4" xdd:path_from="2/0/1/4/2/3/0" xdd:path_to="2/0/1/4/2/2/1/1/5_1" xdd:mctl="F" /><xdd:delete xdd:path="1/20" /><xdd:delete xdd:path="2/0/1/4/2/3" xdd:boundary="0" /></xdd:delta>

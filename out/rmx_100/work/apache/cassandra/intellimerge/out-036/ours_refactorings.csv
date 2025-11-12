@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.99;268-323;org.apache.cassandra.cql3.statements.BatchStatement.getMutations(ClientState, BatchQueryOptions, boolean, long, int, long);269-324;org.apache.cassandra.cql3.statements.BatchStatement.getMutations(ClientState, BatchQueryOptions, boolean, long, long, long)

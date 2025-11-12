@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.72;123-125;org.elasticsearch.search.suggest.SuggestionSearchContext.SuggestionContext.setShard(int);123-125;org.elasticsearch.search.suggest.SuggestionSearchContext.SuggestionContext.setShardContext(QueryShardContext)
+Change Method Signature;method;0.64;135-137;org.elasticsearch.search.suggest.SuggestionSearchContext.SuggestionContext.getShard();127-129;org.elasticsearch.search.suggest.SuggestionSearchContext.SuggestionContext.getShardContext()

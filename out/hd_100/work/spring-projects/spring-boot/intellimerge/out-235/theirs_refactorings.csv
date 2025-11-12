@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Field Signature;field;0.75;41-41;org.springframework.boot.logging.logback.ColorConverter.ELEMENTS;41-41;org.springframework.boot.logging.logback.ColorConverter.elements
+Change Field Signature;field;0.76;55-55;org.springframework.boot.logging.logback.ColorConverter.LEVELS;55-55;org.springframework.boot.logging.logback.ColorConverter.levels

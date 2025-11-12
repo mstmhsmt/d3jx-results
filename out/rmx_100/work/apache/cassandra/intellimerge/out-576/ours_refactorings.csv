@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Field Signature;field;0.7;346-346;org.apache.cassandra.transport.Server.EventNotifier.lastStatusChange;335-335;org.apache.cassandra.transport.Server.LatestEvent.status

@@ -1,0 +1,4 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.94;262-283;org.elasticsearch.search.aggregations.bucket.range.InternalRange.reduce(ReduceContext);297-318;org.elasticsearch.search.aggregations.bucket.range.InternalRange.doReduce(ReduceContext)
+Change Method Signature;method;0.75;224-226;org.elasticsearch.search.aggregations.bucket.range.InternalRange.Factory.create(String, List, ValueFormatter, boolean, Map);234-237;org.elasticsearch.search.aggregations.bucket.range.InternalRange.Factory.create(String, List, ValueFormatter, boolean, List, Map)
+Change Constructor Signature;constructor;0.97;241-246;org.elasticsearch.search.aggregations.bucket.range.InternalRange.InternalRange(String, List, ValueFormatter, boolean, Map);265-271;org.elasticsearch.search.aggregations.bucket.range.InternalRange.InternalRange(String, List, ValueFormatter, boolean, List, Map)

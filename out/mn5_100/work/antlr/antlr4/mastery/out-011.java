@@ -1,0 +1,192 @@
+package org.antlr.v4.runtime;
+
+import org.antlr.v4.runtime.misc.Interval;
+import org.antlr.v4.runtime.misc.Nullable;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.ParseTreeVisitor;
+import org.antlr.v4.runtime.tree.Trees;
+import org.antlr.v4.runtime.tree.gui.TreeViewer;
+import javax.print.PrintException;
+import java.io.IOException;
+import org.antlr.v4.runtime.tree.RuleNode;
+
+public class RuleContext implements RuleNode {
+
+    public RuleContext parent;
+
+    public int invokingState = -1;
+
+    protected int cachedHashCode;
+
+    public RuleContext() {
+    }
+
+    public RuleContext(RuleContext parent, int invokingState) {
+        this.parent = parent;
+        this.invokingState = invokingState;
+        this.cachedHashCode = invokingState;
+        if (parent != null) {
+            this.cachedHashCode += parent.cachedHashCode;
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        return cachedHashCode;
+    }
+
+    public int depth() {
+        int n = 0;
+        RuleContext p = this;
+        while (p != null) {
+            p = p.parent;
+            n++;
+        }
+        return n;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        } else if (!(o instanceof RuleContext)) {
+            return false;
+        }
+        RuleContext other = (RuleContext) o;
+        if (this.hashCode() != other.hashCode()) {
+            return false;
+        }
+        RuleContext sp = this;
+        while (sp != null && other != null) {
+            if (sp == other)
+                return true;
+            if (sp.invokingState != other.invokingState)
+                return false;
+            sp = sp.parent;
+            other = other.parent;
+        }
+        if (!(sp == null && other == null)) {
+            return false;
+        }
+        return true;
+    }
+
+    public boolean conflictsWith(RuleContext other) {
+        return this.suffix(other) || this.equals(other);
+    }
+
+    protected boolean suffix(RuleContext other) {
+        RuleContext sp = this;
+        while (sp.parent != null && other.parent != null) {
+            if (sp.invokingState != other.invokingState) {
+                return false;
+            }
+            sp = sp.parent;
+            other = other.parent;
+        }
+        return true;
+    }
+
+    public boolean isEmpty() {
+        return invokingState == -1;
+    }
+
+    @Override
+    public Interval getSourceInterval() {
+        return Interval.INVALID;
+    }
+
+    @Override
+    public RuleContext getRuleContext() {
+        return this;
+    }
+
+    @Override
+    public RuleContext getParent() {
+        return parent;
+    }
+
+    @Override
+    public RuleContext getPayload() {
+        return this;
+    }
+
+    @Override
+    public String getText() {
+        if (getChildCount() == 0) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < getChildCount(); i++) {
+            builder.append(getChild(i).getText());
+        }
+        return builder.toString();
+    }
+
+    public int getRuleIndex() {
+        return -1;
+    }
+
+    @Override
+    public ParseTree getChild(int i) {
+        return null;
+    }
+
+    @Override
+    public int getChildCount() {
+        return 0;
+    }
+
+    @Override
+    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
+        return visitor.visitChildren(this);
+    }
+
+    public void inspect(Parser parser) {
+        TreeViewer viewer = new TreeViewer(parser, this);
+        viewer.open();
+    }
+
+    public void save(Parser parser, String fileName) throws IOException, PrintException {
+        Trees.writePS(this, parser, fileName);
+    }
+
+    public void save(Parser parser, String fileName, String fontName, int fontSize) throws IOException {
+        Trees.writePS(this, parser, fileName, fontName, fontSize);
+    }
+
+    public String toStringTree(Parser recog) {
+        return Trees.toStringTree(this, recog);
+    }
+
+    @Override
+    public String toStringTree() {
+        return toStringTree(null);
+    }
+
+    @Override
+    public String toString() {
+        return toString(null);
+    }
+
+    public String toString(@Nullable Recognizer<?, ?> recog) {
+        return toString(recog, ParserRuleContext.EMPTY);
+    }
+
+    public String toString(@Nullable Recognizer<?, ?> recog, RuleContext stop) {
+        StringBuilder buf = new StringBuilder();
+        RuleContext p = this;
+        buf.append("[");
+        while (p != null && p != stop) {
+            if (!p.isEmpty())
+                buf.append(p.invokingState);
+            if (p.parent != null && !p.parent.isEmpty())
+                buf.append(" ");
+            p = p.parent;
+        }
+        buf.append("]");
+        return buf.toString();
+    }
+
+    public static final ParserRuleContext<Token> EMPTY = new ParserRuleContext<Token>();
+}

@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Type Signature;class;0.65;30-44;org.elasticsearch.search.aggregations.metrics.MetricsAggregationBuilder;26-42;org.elasticsearch.search.aggregations.metrics.GeoBoundsTests

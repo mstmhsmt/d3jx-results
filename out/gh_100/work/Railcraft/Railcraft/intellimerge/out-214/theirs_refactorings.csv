@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Constructor Signature;constructor;0.75;25-27;mods.railcraft.common.blocks.signals.SignalBlockRelay.SignalBlockRelay(RailcraftTileEntity);25-27;mods.railcraft.common.blocks.signals.SignalBlockRelay.SignalBlockRelay(String, TileEntity)

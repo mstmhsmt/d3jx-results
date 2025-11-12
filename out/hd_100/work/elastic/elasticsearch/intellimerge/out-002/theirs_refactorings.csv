@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.93;262-283;org.elasticsearch.search.aggregations.bucket.range.InternalRange.reduce(ReduceContext);262-282;org.elasticsearch.search.aggregations.bucket.range.InternalRange.reduce(List, ReduceContext)

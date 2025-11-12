@@ -1,0 +1,6 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.7;1716-1737;io.realm.Realm.compactRealmFile(Context, String, byte[]);1852-1873;io.realm.Realm.compactRealm(RealmConfiguration)
+Change Method Signature;method;0.64;1670-1697;io.realm.Realm.deleteRealmFile(File);1770-1795;io.realm.Realm.deleteRealm(RealmConfiguration)
+Change Method Signature;method;0.84;546-655;io.realm.Realm.initializeRealm(Realm);616-727;io.realm.Realm.initializeRealm(Realm, RealmConfiguration)
+Change Method Signature;method;0.67;488-535;io.realm.Realm.createAndValidate(String, byte[], boolean, boolean);556-614;io.realm.Realm.createAndValidate(RealmConfiguration, boolean, boolean)
+Extract Method;method;0.53;1627-1636;io.realm.Realm.migrateRealmAtPath(String, byte[], RealmMigration, boolean);1719-1727;io.realm.Realm.migrateRealm(RealmConfiguration)

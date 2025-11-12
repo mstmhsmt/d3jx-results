@@ -1,0 +1,5 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Type Signature;class;0.64;326-345;org.cometd.oort.OortService.ServiceException;510-575;org.cometd.oort.OortService.Result
+Change Method Signature;method;0.64;296-296;org.cometd.oort.OortService.onForward(Object);411-411;org.cometd.oort.OortService.onForward(Request)
+Change Field Signature;field;0.82;97-97;org.cometd.oort.OortService.actions;102-102;org.cometd.oort.OortService.contextIds
+Change Field Signature;field;0.65;91-91;org.cometd.oort.OortService.ACTION_FIELD;95-95;org.cometd.oort.OortService.DATA_FIELD

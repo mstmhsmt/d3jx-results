@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Constructor Signature;constructor;0.98;78-89;org.gradle.internal.fingerprint.classpath.impl.ClasspathFingerprintingStrategy.ClasspathFingerprintingStrategy(String, NonJarFingerprintingStrategy, ResourceHasher, ResourceSnapshotterCacheService, Interner);78-94;org.gradle.internal.fingerprint.classpath.impl.ClasspathFingerprintingStrategy.ClasspathFingerprintingStrategy(String, NonJarFingerprintingStrategy, ResourceHasher, ZipHasher, ResourceSnapshotterCacheService, Interner)

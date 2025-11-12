@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.85;178-197;org.elasticsearch.cluster.NoMasterNodeTests.checkBulkAction(boolean, TimeValue, BulkRequestBuilder);179-205;org.elasticsearch.cluster.NoMasterNodeTests.checkBulkAction(boolean, BulkRequestBuilder)

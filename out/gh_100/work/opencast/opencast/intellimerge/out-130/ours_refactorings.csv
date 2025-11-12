@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.83;1492-1505;org.opencastproject.scheduler.impl.SchedulerServiceImpl.removeSchedulingFromIndex(String, ElasticsearchIndex);1499-1522;org.opencastproject.scheduler.impl.SchedulerServiceImpl.removeSchedulingInfoFromIndex(String, ElasticsearchIndex)

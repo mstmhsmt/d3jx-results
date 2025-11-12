@@ -1,0 +1,310 @@
+package org.opencastproject.userdirectory.moodle;
+
+import org.opencastproject.security.api.CachingUserProviderMXBean;
+import org.opencastproject.security.api.Group;
+import org.opencastproject.security.api.JaxbOrganization;
+import org.opencastproject.security.api.JaxbRole;
+import org.opencastproject.security.api.JaxbUser;
+import org.opencastproject.security.api.Organization;
+import org.opencastproject.security.api.Role;
+import org.opencastproject.security.api.RoleProvider;
+import org.opencastproject.security.api.User;
+import org.opencastproject.security.api.UserProvider;
+import org.opencastproject.userdirectory.moodle.MoodleWebService.CoreUserGetUserByFieldFilters;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import com.google.common.util.concurrent.ExecutionError;
+import com.google.common.util.concurrent.UncheckedExecutionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.PatternSyntaxException;
+import javax.management.InstanceNotFoundException;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import org.opencastproject.security.api.SecurityConstants;
+import org.apache.commons.lang3.StringUtils;
+
+public class MoodleUserProviderInstance implements UserProvider, RoleProvider, CachingUserProviderMXBean {
+
+    private static final String PROVIDER_NAME = "moodle";
+
+    private static final Logger logger = LoggerFactory.getLogger(MoodleUserProviderInstance.class);
+
+    private static final String LEARNER_ROLE_SUFFIX = "Learner";
+
+    private static final String INSTRUCTOR_ROLE_SUFFIX = "Instructor";
+
+    private static final String GROUP_ROLE_PREFIX = "G";
+
+    private static final String GROUP_ROLE_SUFFIX = "Learner";
+
+    private MoodleWebService client;
+
+    private Organization organization;
+
+    private boolean groupRoles;
+
+    private String coursePattern;
+
+    private String userPattern;
+
+    private String groupPattern;
+
+    private LoadingCache<String, Object> cache;
+
+    private Object nullToken = new Object();
+
+    private AtomicLong loadUserRequests;
+
+    private AtomicLong moodleWebServiceRequests;
+
+    public MoodleUserProviderInstance(String pid, MoodleWebService client, Organization organization, String coursePattern, String userPattern, String groupPattern, boolean groupRoles, int cacheSize, int cacheExpiration, String adminUserName) {
+        this.client = client;
+        this.organization = organization;
+        this.groupRoles = groupRoles;
+        this.coursePattern = coursePattern;
+        this.userPattern = userPattern;
+        this.groupPattern = groupPattern;
+        this.ignoredUsernames = new ArrayList<>();
+        this.ignoredUsernames.add("");
+        this.ignoredUsernames.add(SecurityConstants.GLOBAL_ANONYMOUS_USERNAME);
+        if (StringUtils.isNoneEmpty(adminUserName)) {
+            ignoredUsernames.add(adminUserName);
+        }
+        logger.info("Creating new MoodleUserProviderInstance(pid={}, url={}, cacheSize={}, cacheExpiration={})", pid, client.getURL(), cacheSize, cacheExpiration);
+        cache = CacheBuilder.newBuilder().maximumSize(cacheSize).expireAfterWrite(cacheExpiration, TimeUnit.MINUTES).build(new CacheLoader<String, Object>() {
+
+            @Override
+            public Object load(String username) {
+                User user = loadUserFromMoodle(username);
+                return user == null ? nullToken : user;
+            }
+        });
+        registerMBean(pid);
+    }
+
+    @Override
+    public float getCacheHitRatio() {
+        if (loadUserRequests.get() == 0)
+            return 0;
+        return (float) (loadUserRequests.get() - moodleWebServiceRequests.get()) / loadUserRequests.get();
+    }
+
+    private void registerMBean(String pid) {
+        loadUserRequests = new AtomicLong();
+        moodleWebServiceRequests = new AtomicLong();
+        try {
+            ObjectName name;
+            name = MoodleUserProviderFactory.getObjectName(pid);
+            Object mbean = this;
+            MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+            try {
+                mbs.unregisterMBean(name);
+            } catch (InstanceNotFoundException e) {
+                logger.debug("{} was not registered", name);
+            }
+            mbs.registerMBean(mbean, name);
+        } catch (Exception e) {
+            logger.error("Unable to register {} as an mbean: {}", this, e);
+        }
+    }
+
+    @Override
+    public String getName() {
+        return PROVIDER_NAME;
+    }
+
+    @Override
+    public Iterator<User> getUsers() {
+        return Collections.emptyIterator();
+    }
+
+    @Override
+    public User loadUser(String userName) {
+        loadUserRequests.incrementAndGet();
+        try {
+            Object user = cache.getUnchecked(userName);
+            if (user == nullToken) {
+                logger.debug("Returning null user from cache");
+                return null;
+            } else {
+                logger.debug("Returning user {} from cache", userName);
+                return (User) user;
+            }
+        } catch (ExecutionError e) {
+            logger.warn("Exception while loading user {}", userName, e);
+            return null;
+        } catch (UncheckedExecutionException e) {
+            logger.warn("Exception while loading user {}", userName, e);
+            return null;
+        }
+    }
+
+    @Override
+    public long countUsers() {
+        return 0;
+    }
+
+    @Override
+    public String getOrganization() {
+        return organization.getId();
+    }
+
+    @Override
+    public Iterator<User> findUsers(String query, int offset, int limit) {
+        if (query == null)
+            throw new IllegalArgumentException("Query must be set");
+        if (query.endsWith("%"))
+            query = query.substring(0, query.length() - 1);
+        if (query.isEmpty())
+            return Collections.emptyIterator();
+        try {
+            if ((userPattern != null) && !query.matches(userPattern)) {
+                logger.debug("verify user {} failed regexp {}", query, userPattern);
+                return Collections.emptyIterator();
+            }
+        } catch (PatternSyntaxException e) {
+            logger.warn("Invalid regular expression for user pattern {} - disabling checks", userPattern);
+            userPattern = null;
+        }
+        List<User> users = new LinkedList<>();
+        User user = loadUser(query);
+        if (user != null)
+            users.add(user);
+        return users.iterator();
+    }
+
+    @Override
+    public void invalidate(String userName) {
+        cache.invalidate(userName);
+    }
+
+    @Override
+    public Iterator<Role> getRoles() {
+        return Collections.emptyIterator();
+    }
+
+    @Override
+    public List<Role> getRolesForUser(String username) {
+        List<Role> roles = new LinkedList<>();
+        if (ignoredUsernames.stream().anyMatch(u -> u.equals(username))) {
+            logger.debug("we don't answer for: {}", username);
+            return roles;
+        }
+        User user = loadUser(username);
+        if (user != null) {
+            logger.debug("Returning cached role set for {}", username);
+            return new ArrayList<>(user.getRoles());
+        }
+        logger.debug("Return empty role set for {} - not found in Moodle", username);
+        return new LinkedList<>();
+    }
+
+    @Override
+    public Iterator<Role> findRoles(String query, Role.Target target, int offset, int limit) {
+        if (target == Role.Target.USER)
+            return Collections.emptyIterator();
+        boolean exact = true;
+        boolean ltirole = false;
+        if (query.endsWith("%")) {
+            exact = false;
+            query = query.substring(0, query.length() - 1);
+        }
+        if (query.isEmpty())
+            return Collections.emptyIterator();
+        if (exact && !query.endsWith("_" + LEARNER_ROLE_SUFFIX) && !query.endsWith("_" + INSTRUCTOR_ROLE_SUFFIX) && !query.endsWith("_" + GROUP_ROLE_SUFFIX))
+            return Collections.emptyIterator();
+        boolean findGroupRole = groupRoles && query.startsWith(GROUP_ROLE_PREFIX);
+        String moodleId = findGroupRole ? query.substring(GROUP_ROLE_PREFIX.length()) : query;
+        if (query.endsWith("_" + LEARNER_ROLE_SUFFIX)) {
+            moodleId = query.substring(0, query.lastIndexOf("_" + LEARNER_ROLE_SUFFIX));
+            ltirole = true;
+        } else if (query.endsWith("_" + INSTRUCTOR_ROLE_SUFFIX)) {
+            moodleId = query.substring(0, query.lastIndexOf("_" + INSTRUCTOR_ROLE_SUFFIX));
+            ltirole = true;
+        } else if (query.endsWith("_" + GROUP_ROLE_SUFFIX)) {
+            moodleId = query.substring(0, query.lastIndexOf("_" + GROUP_ROLE_SUFFIX));
+            ltirole = true;
+        }
+        String pattern = findGroupRole ? groupPattern : coursePattern;
+        try {
+            if ((pattern != null) && !moodleId.matches(pattern)) {
+                logger.debug("Verify Moodle ID {} failed regexp {}", moodleId, pattern);
+                return Collections.emptyIterator();
+            }
+        } catch (PatternSyntaxException e) {
+            logger.warn("Invalid regular expression for pattern {} - disabling checks", pattern);
+            if (findGroupRole) {
+                groupPattern = null;
+            } else {
+                coursePattern = null;
+            }
+        }
+        List<Role> roles = new LinkedList<>();
+        JaxbOrganization jaxbOrganization = JaxbOrganization.fromOrganization(organization);
+        if (ltirole) {
+            roles.add(new JaxbRole(query, jaxbOrganization, "Moodle Site Role", Role.Type.EXTERNAL));
+        } else if (findGroupRole) {
+            roles.add(new JaxbRole(GROUP_ROLE_PREFIX + moodleId + "_" + GROUP_ROLE_SUFFIX, jaxbOrganization, "Moodle Group Learner Role", Role.Type.EXTERNAL));
+        } else {
+            roles.add(new JaxbRole(moodleId + "_" + INSTRUCTOR_ROLE_SUFFIX, jaxbOrganization, "Moodle Course Instructor Role", Role.Type.EXTERNAL));
+            roles.add(new JaxbRole(moodleId + "_" + LEARNER_ROLE_SUFFIX, jaxbOrganization, "Moodle Course Learner Role", Role.Type.EXTERNAL));
+        }
+        return roles.iterator();
+    }
+
+    private User loadUserFromMoodle(String username) {
+        logger.debug("loadUserFromMoodle({})", username);
+        if (cache == null)
+            throw new IllegalStateException("The Moodle user detail service has not yet been configured");
+        if (ignoredUsernames.stream().anyMatch(u -> u.equals(username))) {
+            logger.debug("We don't answer for: " + username);
+            return null;
+        }
+        JaxbOrganization jaxbOrganization = JaxbOrganization.fromOrganization(organization);
+        moodleWebServiceRequests.incrementAndGet();
+        Thread currentThread = Thread.currentThread();
+        ClassLoader originalClassloader = currentThread.getContextClassLoader();
+        try {
+            List<MoodleUser> moodleUsers = client.coreUserGetUsersByField(CoreUserGetUserByFieldFilters.username, Collections.singletonList(username));
+            if (moodleUsers.isEmpty()) {
+                logger.debug("User {} not found in Moodle system", username);
+                return null;
+            }
+            MoodleUser moodleUser = moodleUsers.get(0);
+            List<String> courseIdsInstructor = client.toolOpencastGetCoursesForInstructor(username);
+            List<String> courseIdsLearner = client.toolOpencastGetCoursesForLearner(username);
+            List<String> groupIdsLearner = groupRoles ? client.toolOpencastGetGroupsForLearner(username) : Collections.emptyList();
+            Set<JaxbRole> roles = new HashSet<>();
+            roles.add(new JaxbRole(Group.ROLE_PREFIX + "MOODLE", jaxbOrganization, "Moodle Users", Role.Type.EXTERNAL_GROUP));
+            for (String courseId : courseIdsInstructor) {
+                roles.add(new JaxbRole(courseId + "_" + INSTRUCTOR_ROLE_SUFFIX, jaxbOrganization, "Moodle Course Instructor Role", Role.Type.EXTERNAL));
+            }
+            for (String courseId : courseIdsLearner) {
+                roles.add(new JaxbRole(courseId + "_" + LEARNER_ROLE_SUFFIX, jaxbOrganization, "Moodle Course Learner Role", Role.Type.EXTERNAL));
+            }
+            for (String groupId : groupIdsLearner) {
+                roles.add(new JaxbRole(GROUP_ROLE_PREFIX + groupId + "_" + GROUP_ROLE_SUFFIX, jaxbOrganization, "Moodle Group Learner Role", Role.Type.EXTERNAL));
+            }
+            return new JaxbUser(moodleUser.getUsername(), null, moodleUser.getFullname(), moodleUser.getEmail(), this.getName(), jaxbOrganization, roles);
+        } catch (Exception e) {
+            logger.warn("Exception loading Moodle user {} at {}: {}", username, client.getURL(), e.getMessage());
+        } finally {
+            currentThread.setContextClassLoader(originalClassloader);
+        }
+        return null;
+    }
+
+    private final List<String> ignoredUsernames;
+}

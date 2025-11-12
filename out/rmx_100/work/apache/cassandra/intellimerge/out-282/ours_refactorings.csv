@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.64;47-50;org.apache.cassandra.transport.Connection.getCompressor();48-51;org.apache.cassandra.transport.Connection.getTransformer()

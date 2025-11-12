@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.85;246-301;org.apache.cassandra.distributed.impl.Instance.startup(ICluster);261-323;org.apache.cassandra.distributed.impl.Instance.startup(ICluster, Set)
+Extract Method;method;0.63;367-400;org.apache.cassandra.distributed.impl.Instance.shutdown();398-440;org.apache.cassandra.distributed.impl.Instance.shutdown(boolean)

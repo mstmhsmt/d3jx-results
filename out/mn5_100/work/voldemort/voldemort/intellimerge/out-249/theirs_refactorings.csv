@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.81;146-303;voldemort.utils.Entropy.generateEntropy(Cluster, List, File, boolean);176-383;voldemort.utils.Entropy.generateEntropy(Cluster, List, File, boolean, boolean)

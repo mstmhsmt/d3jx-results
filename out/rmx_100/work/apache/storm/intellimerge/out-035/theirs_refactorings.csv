@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.59;303-313;backtype.storm.utils.Utils.getInt(Object);313-327;backtype.storm.utils.Utils.getInt(Object, Integer)

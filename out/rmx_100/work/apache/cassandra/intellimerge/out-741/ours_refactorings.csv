@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.8;67-67;org.apache.cassandra.cql3.statements.SchemaAlteringStatement.announceMigration();68-68;org.apache.cassandra.cql3.statements.SchemaAlteringStatement.announceMigration(boolean)
+Change Method Signature;method;0.73;65-65;org.apache.cassandra.cql3.statements.SchemaAlteringStatement.changeType();66-66;org.apache.cassandra.cql3.statements.SchemaAlteringStatement.changeEvent()

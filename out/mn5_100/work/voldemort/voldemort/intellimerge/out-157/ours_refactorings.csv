@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.71;390-416;voldemort.store.readonly.ReadOnlyStorageEngine.getAll(Iterable);390-417;voldemort.store.readonly.ReadOnlyStorageEngine.getAll(Iterable, Map)
+Change Method Signature;method;0.71;375-388;voldemort.store.readonly.ReadOnlyStorageEngine.get(ByteArray);375-388;voldemort.store.readonly.ReadOnlyStorageEngine.get(ByteArray, byte[])

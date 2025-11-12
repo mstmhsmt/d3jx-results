@@ -1,0 +1,4 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.92;521-523;lombok.javac.handlers.HandleEqualsAndHashCode.returnBool(TreeMaker, boolean);522-524;lombok.javac.handlers.HandleEqualsAndHashCode.returnBool(JavacTreeMaker, boolean)
+Change Method Signature;method;0.97;511-519;lombok.javac.handlers.HandleEqualsAndHashCode.generateCompareFloatOrDouble(JCExpression, JCExpression, TreeMaker, JavacNode, boolean);512-520;lombok.javac.handlers.HandleEqualsAndHashCode.generateCompareFloatOrDouble(JCExpression, JCExpression, JavacTreeMaker, JavacNode, boolean)
+Change Method Signature;method;0.99;333-338;lombok.javac.handlers.HandleEqualsAndHashCode.longToIntForHashCode(TreeMaker, JCExpression, JCExpression);333-338;lombok.javac.handlers.HandleEqualsAndHashCode.longToIntForHashCode(JavacTreeMaker, JCExpression, JCExpression)

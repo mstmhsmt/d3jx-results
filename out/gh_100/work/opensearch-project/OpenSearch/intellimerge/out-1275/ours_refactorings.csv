@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Constructor Signature;constructor;0.89;1016-1020;org.elasticsearch.index.translog.Translog.Delete.Delete(Term, long, VersionType);1035-1040;org.elasticsearch.index.translog.Translog.Delete.Delete(Term, long, long, VersionType)

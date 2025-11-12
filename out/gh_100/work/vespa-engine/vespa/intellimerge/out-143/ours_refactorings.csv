@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.62;589-591;com.yahoo.vespa.config.server.ApplicationRepository.deleteUnusedFileDistributionReferences(File, Duration);593-614;com.yahoo.vespa.config.server.ApplicationRepository.deleteUnusedFileDistributionReferences(File, Duration, int)

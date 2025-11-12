@@ -1,0 +1,229 @@
+package org.deeplearning4j.nn.modelimport.keras;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.IOUtils;
+import org.deeplearning4j.nn.conf.ComputationGraphConfiguration;
+import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+/**
+ * Routines for importing saved Keras model configurations.
+ *
+ * @author dave@skymind.io
+ *
+ * @deprecated Use {@link org.deeplearning4j.nn.modelimport.keras.KerasModel} and
+ *             {@link org.deeplearning4j.nn.modelimport.keras.KerasSequentialModel} instead.
+ */
+@Deprecated @Slf4j public class ModelConfiguration {
+  private ModelConfiguration() {
+  }
+
+  /**
+     * Imports a Keras Sequential model configuration saved using call to model.to_json().
+     *
+     * @param inputStream    The input stream to parse for json
+     * @return                      DL4J MultiLayerConfiguration
+     * @throws IOException
+     */
+  public static MultiLayerConfiguration importSequentialModelConfigFromInputStream(InputStream inputStream) throws IOException {
+    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+    IOUtils.copy(inputStream, byteArrayOutputStream);
+    String configJson = new String(byteArrayOutputStream.toByteArray());
+    return importSequentialModelConfig(configJson);
+  }
+
+  /**
+     * Imports a Keras Sequential model configuration saved using call to model.to_json().
+     *
+     * @param modelJsonFilename    Path to text file storing Keras Sequential configuration as valid JSON.
+     * @return                     DL4J MultiLayerConfiguration
+     * @throws IOException
+     * @deprecated Use {@link KerasModelImport#importKerasSequentialConfiguration} instead
+     */
+  @Deprecated public static MultiLayerConfiguration importSequentialModelConfigFromFile(String modelJsonFilename) throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
+    return KerasModelImport.importKerasSequentialConfiguration(modelJsonFilename);
+  }
+
+  /**
+     * Imports a Keras Functional API model configuration saved using call to model.to_json().
+     *
+     * @param inputStream    Path to text file storing Keras configuration as valid JSON.
+     * @return                      DL4J ComputationGraphConfiguration
+     * @throws IOException
+     */
+  public static ComputationGraphConfiguration importFunctionalApiConfigFromInputStream(InputStream inputStream) throws IOException {
+    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+    IOUtils.copy(inputStream, byteArrayOutputStream);
+    String configJson = new String(byteArrayOutputStream.toByteArray());
+    return importFunctionalApiConfig(configJson);
+  }
+
+  /**
+     * Imports a Keras Functional API model configuration saved using call to model.to_json().
+     *
+     * @param modelJsonFilename    Path to text file storing Keras Model configuration as valid JSON.
+     * @return                     DL4J ComputationGraphConfiguration
+     * @throws IOException
+     * @deprecated Use {@link KerasModelImport#importKerasModelConfiguration} instead
+     */
+  @Deprecated public static ComputationGraphConfiguration importFunctionalApiConfigFromFile(String modelJsonFilename) throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
+    return KerasModelImport.importKerasModelConfiguration(modelJsonFilename);
+  }
+
+  /**
+     * Imports a Keras Sequential model configuration saved using call to model.to_json().
+     *
+     * @param modelJson    String storing Keras Sequential configuration as valid JSON.
+     * @return             DL4J MultiLayerConfiguration
+     * @throws IOException
+     * @deprecated Use {@link org.deeplearning4j.nn.modelimport.keras.KerasSequentialModel} instead
+     */
+  @Deprecated public static MultiLayerConfiguration importSequentialModelConfig(String modelJson) throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
+    KerasSequentialModel kerasModel = new KerasSequentialModel.ModelBuilder().modelJson(modelJson).buildSequential();
+    return kerasModel.getMultiLayerConfiguration();
+  }
+
+  /**
+     * Imports a Keras Functional API model configuration saved using call to model.to_json().
+     *
+     * @param modelJson    String storing Keras Model configuration as valid JSON.
+     * @return             DL4J ComputationGraphConfiguration
+     * @throws IOException
+     * @deprecated Use {@link org.deeplearning4j.nn.modelimport.keras.KerasModel} instead
+     */
+  @Deprecated public static ComputationGraphConfiguration importFunctionalApiConfig(String modelJson) throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
+    KerasModel kerasModel = new KerasModel.ModelBuilder().modelJson(modelJson).buildSequential();
+    return kerasModel.getComputationGraphConfiguration();
+  }
+
+
+<<<<<<< Unknown file: This is a bug in JDime.
+=======
+  /**
+     * Imports a Keras Sequential model configuration saved using call to model.to_json().
+     *
+     * @param kerasConfig   Nested Map storing Keras configuration read from valid JSON.
+     * @return              DL4J MultiLayerConfiguration
+     * @throws IOException
+     * @throws NotImplementedException
+     * @throws IncompatibleKerasConfigurationException
+     */
+  private static MultiLayerConfiguration importSequentialModelConfig(Map<String, Object> kerasConfig) throws IOException, IncompatibleKerasConfigurationException {
+    String arch = (String) kerasConfig.get("class_name");
+    if (!arch.equals("Sequential")) {
+      throw new IncompatibleKerasConfigurationException("Expected \"Sequential\" model config, found " + arch);
+    }
+    double prevDropout = 0.0;
+    List<Map<String, Object>> layerConfigs = new ArrayList<>();
+    for (Object o : (List<Object>) kerasConfig.get("config")) {
+      String kerasLayerName = (String) ((Map<String, Object>) o).get("class_name");
+      Map<String, Object> layerConfig = (Map<String, Object>) ((Map<String, Object>) o).get("config");
+      switch (kerasLayerName) {
+        case "Dropout":
+        prevDropout = (double) layerConfig.get("p");
+        continue;
+        case "Activation":
+        if (layerConfigs.size() == 0) {
+          throw new IncompatibleKerasConfigurationException("Plain activation layer applied to input not supported.");
+        }
+        String activation = LayerConfiguration.mapActivation((String) layerConfig.get("activation"));
+        layerConfigs.get(layerConfigs.size() - 1).put("activation", activation);
+        continue;
+      }
+      layerConfig.put("keras_class", kerasLayerName);
+      if (prevDropout > 0) {
+        double oldDropout = layerConfig.containsKey("dropout") ? (double) layerConfig.get("dropout") : 0.0;
+        double newDropout = 1.0 - (1.0 - prevDropout) * (1.0 - oldDropout);
+        layerConfig.put("dropout", newDropout);
+        if (oldDropout != newDropout) {
+          log.warn("Changed layer-defined dropout " + oldDropout + " to " + newDropout + " because of previous Dropout=" + newDropout + " layer");
+        }
+        prevDropout = 0.0;
+      }
+      layerConfigs.add(layerConfig);
+    }
+    List<Integer> batchInputShape = null;
+    String dimOrdering = null;
+    boolean isRecurrent = false;
+    boolean isConvolutional = false;
+    NeuralNetConfiguration.Builder modelBuilder = new NeuralNetConfiguration.Builder();
+    NeuralNetConfiguration.ListBuilder listBuilder = modelBuilder.list();
+    int layerIndex = 0;
+    for (Map<String, Object> layerConfig : layerConfigs) {
+      String kerasLayerName = (String) layerConfig.get("keras_class");
+      if (layerConfig.containsKey("batch_input_shape")) {
+        if (layerIndex > 0) {
+          throw new IncompatibleKerasConfigurationException("Non-input layer should not specify \"batch_input_shape\" field");
+        } else {
+          batchInputShape = (List<Integer>) layerConfig.get("batch_input_shape");
+        }
+      } else {
+        if (layerIndex == 0) {
+          throw new IncompatibleKerasConfigurationException("Input layer must specify \"batch_input_shape\" field");
+        }
+      }
+      if (layerConfig.containsKey("dim_ordering")) {
+        String layerDimOrdering = (String) layerConfig.get("dim_ordering");
+        if (!layerDimOrdering.equals("th") && !layerDimOrdering.equals("tf")) {
+          throw new IncompatibleKerasConfigurationException("Unknown Keras backend: " + layerDimOrdering);
+        }
+        if (dimOrdering != null && !layerDimOrdering.equals(dimOrdering)) {
+          throw new IncompatibleKerasConfigurationException("Found layers with conflicting Keras backends.");
+        }
+        dimOrdering = layerDimOrdering;
+      }
+      Layer layer = LayerConfiguration.buildLayer(kerasLayerName, layerConfig, (layerIndex == layerConfigs.size() - 1));
+      if (layer == null) {
+        continue;
+      }
+      if (layer instanceof BaseRecurrentLayer) {
+        isRecurrent = true;
+      } else {
+        if (layer instanceof ConvolutionLayer) {
+          isConvolutional = true;
+        }
+      }
+      if (layer.getL1() > 0 || layer.getL2() > 0) {
+        modelBuilder.regularization(true);
+      }
+      listBuilder.layer(layerIndex, layer);
+      layerIndex++;
+    }
+    if (isRecurrent && isConvolutional) {
+      throw new IncompatibleKerasConfigurationException("Recurrent convolutional architecture not supported.");
+    } else {
+      if (isRecurrent) {
+        listBuilder.setInputType(InputType.recurrent(batchInputShape.get(2)));
+        if (batchInputShape.get(1) == null) {
+          log.warn("Input sequence length must be specified manually for truncated BPTT!");
+        } else {
+          int sequenceLength = batchInputShape.get(1);
+          listBuilder.tBPTTForwardLength(sequenceLength).tBPTTBackwardLength(sequenceLength);
+        }
+      } else {
+        if (isConvolutional) {
+          int[] imageSize = new int[3];
+          if (dimOrdering.equals("tf")) {
+            imageSize[0] = batchInputShape.get(1);
+            imageSize[1] = batchInputShape.get(2);
+            imageSize[2] = batchInputShape.get(3);
+          } else {
+            if (dimOrdering.equals("th")) {
+              imageSize[0] = batchInputShape.get(2);
+              imageSize[1] = batchInputShape.get(3);
+              imageSize[2] = batchInputShape.get(1);
+            } else {
+              throw new IncompatibleKerasConfigurationException("Unknown keras backend " + dimOrdering);
+            }
+          }
+          listBuilder.setInputType(InputType.convolutional(imageSize[0], imageSize[1], imageSize[2]));
+        } else {
+          listBuilder.setInputType(InputType.feedForward(batchInputShape.get(1)));
+        }
+      }
+    }
+    return listBuilder.build();
+  }
+>>>>>>> commits-rmx_100/deeplearning4j/deeplearning4j/46c63ea54b08d55145da3fbef867f937096769f9/ModelConfiguration-4becf22.java
+}

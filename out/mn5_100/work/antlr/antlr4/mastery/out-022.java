@@ -1,0 +1,264 @@
+package org.antlr.v4.runtime;
+
+import org.antlr.v4.runtime.atn.*;
+import org.antlr.v4.runtime.misc.IntervalSet;
+import org.antlr.v4.runtime.misc.NotNull;
+
+public class DefaultErrorStrategy implements ANTLRErrorStrategy {
+
+    protected TokenFactory<?> _factory = CommonTokenFactory.DEFAULT;
+
+    protected boolean errorRecoveryMode = false;
+
+    protected int lastErrorIndex = -1;
+
+    protected IntervalSet lastErrorStates;
+
+    @Override
+    public void setTokenFactory(TokenFactory<?> factory) {
+        this._factory = factory;
+    }
+
+    @Override
+    public void beginErrorCondition(Parser recognizer) {
+        errorRecoveryMode = true;
+    }
+
+    @Override
+    public boolean inErrorRecoveryMode(Parser recognizer) {
+        return errorRecoveryMode;
+    }
+
+    @Override
+    public void endErrorCondition(Parser recognizer) {
+        errorRecoveryMode = false;
+        lastErrorStates = null;
+        lastErrorIndex = -1;
+    }
+
+    @Override
+    public void reportError(Parser recognizer, RecognitionException e) throws RecognitionException {
+        if (errorRecoveryMode) {
+            return;
+        }
+        recognizer._syntaxErrors++;
+        beginErrorCondition(recognizer);
+        if (e instanceof NoViableAltException) {
+            reportNoViableAlternative(recognizer, (NoViableAltException) e);
+        } else if (e instanceof InputMismatchException) {
+            reportInputMismatch(recognizer, (InputMismatchException) e);
+        } else if (e instanceof FailedPredicateException) {
+            reportFailedPredicate(recognizer, (FailedPredicateException) e);
+        } else {
+            System.err.println("unknown recognition error type: " + e.getClass().getName());
+            if (recognizer != null) {
+                recognizer.notifyErrorListeners((Token) e.offendingToken, e.getMessage(), e);
+            }
+        }
+    }
+
+    @Override
+    public void recover(Parser recognizer, RecognitionException e) {
+        if (lastErrorIndex == recognizer.getInputStream().index() && lastErrorStates.contains(recognizer._ctx.s)) {
+            recognizer.consume();
+        }
+        lastErrorIndex = recognizer.getInputStream().index();
+        if (lastErrorStates == null)
+            lastErrorStates = new IntervalSet();
+        lastErrorStates.add(recognizer._ctx.s);
+        IntervalSet followSet = getErrorRecoverySet(recognizer);
+        consumeUntil(recognizer, followSet);
+    }
+
+    @Override
+    public void sync(Parser recognizer) {
+        ATNState s = recognizer.getInterpreter().atn.states.get(recognizer._ctx.s);
+        if (errorRecoveryMode)
+            return;
+        SymbolStream<Token> tokens = recognizer.getInputStream();
+        int la = tokens.LA(1);
+        if (recognizer.getATN().nextTokens(s).contains(la) || la == Token.EOF)
+            return;
+        if (recognizer.isExpectedToken(la)) {
+            return;
+        }
+        if (s instanceof PlusBlockStartState || s instanceof StarLoopEntryState || s instanceof BlockStartState) {
+            if (singleTokenDeletion(recognizer) != null)
+                return;
+            throw new InputMismatchException(recognizer);
+        }
+        if (s instanceof PlusLoopbackState || s instanceof StarLoopbackState) {
+            reportUnwantedToken(recognizer);
+            IntervalSet expecting = recognizer.getExpectedTokens();
+            IntervalSet whatFollowsLoopIterationOrRule = expecting.or(getErrorRecoverySet(recognizer));
+            consumeUntil(recognizer, whatFollowsLoopIterationOrRule);
+        }
+    }
+
+    public void reportNoViableAlternative(Parser recognizer, NoViableAltException e) throws RecognitionException {
+        SymbolStream<Token> tokens = recognizer.getInputStream();
+        String input;
+        if (tokens instanceof TokenStream) {
+            if (e.startToken.getType() == Token.EOF)
+                input = "<EOF>";
+            else
+                input = ((TokenStream) tokens).toString(e.startToken, e.offendingToken);
+        } else {
+            input = "<unknown input>";
+        }
+        String msg = "no viable alternative at input " + escapeWSAndQuote(input);
+        recognizer.notifyErrorListeners((Token) e.offendingToken, msg, e);
+    }
+
+    public void reportInputMismatch(Parser recognizer, InputMismatchException e) throws RecognitionException {
+        String msg = "mismatched input " + getTokenErrorDisplay((Token) e.offendingToken) + " expecting " + e.getExpectedTokens().toString(recognizer.getTokenNames());
+        recognizer.notifyErrorListeners((Token) e.offendingToken, msg, e);
+    }
+
+    public void reportFailedPredicate(Parser recognizer, FailedPredicateException e) throws RecognitionException {
+        String ruleName = recognizer.getRuleNames()[recognizer._ctx.getRuleIndex()];
+        String msg = "rule " + ruleName + " " + e.msg;
+        recognizer.notifyErrorListeners((Token) e.offendingToken, msg, e);
+    }
+
+    public void reportUnwantedToken(Parser recognizer) {
+        if (errorRecoveryMode)
+            return;
+        recognizer._syntaxErrors++;
+        beginErrorCondition(recognizer);
+        Token t = recognizer.getCurrentToken();
+        String tokenName = getTokenErrorDisplay(t);
+        IntervalSet expecting = getExpectedTokens(recognizer);
+        String msg = "extraneous input " + tokenName + " expecting " + expecting.toString(recognizer.getTokenNames());
+        recognizer.notifyErrorListeners(t, msg, null);
+    }
+
+    public void reportMissingToken(Parser recognizer) {
+        if (errorRecoveryMode)
+            return;
+        recognizer._syntaxErrors++;
+        beginErrorCondition(recognizer);
+        Token t = recognizer.getCurrentToken();
+        IntervalSet expecting = getExpectedTokens(recognizer);
+        String msg = "missing " + expecting.toString(recognizer.getTokenNames()) + " at " + getTokenErrorDisplay(t);
+        recognizer.notifyErrorListeners(t, msg, null);
+    }
+
+    @Override
+    public Token recoverInline(Parser recognizer) throws RecognitionException {
+        Token matchedSymbol = singleTokenDeletion(recognizer);
+        if (matchedSymbol != null) {
+            recognizer.consume();
+            return matchedSymbol;
+        }
+        if (singleTokenInsertion(recognizer)) {
+            return getMissingSymbol(recognizer);
+        }
+        throw new InputMismatchException(recognizer);
+    }
+
+    public boolean singleTokenInsertion(Parser recognizer) {
+        int currentSymbolType = recognizer.getInputStream().LA(1);
+        ATNState currentState = recognizer.getInterpreter().atn.states.get(recognizer._ctx.s);
+        ATNState next = currentState.transition(0).target;
+        IntervalSet expectingAtLL2 = recognizer.getInterpreter().atn.nextTokens(next, recognizer._ctx);
+        if (expectingAtLL2.contains(currentSymbolType)) {
+            reportMissingToken(recognizer);
+            return true;
+        }
+        return false;
+    }
+
+    public Token singleTokenDeletion(Parser recognizer) {
+        int nextTokenType = recognizer.getInputStream().LA(2);
+        IntervalSet expecting = getExpectedTokens(recognizer);
+        if (expecting.contains(nextTokenType)) {
+            reportUnwantedToken(recognizer);
+            recognizer.consume();
+            Token matchedSymbol = recognizer.getCurrentToken();
+            endErrorCondition(recognizer);
+            return matchedSymbol;
+        }
+        return null;
+    }
+
+    protected Token getMissingSymbol(Parser recognizer) {
+        Token currentSymbol = recognizer.getCurrentToken();
+        IntervalSet expecting = getExpectedTokens(recognizer);
+        int expectedTokenType = expecting.getMinElement();
+        String tokenText;
+        if (expectedTokenType == Token.EOF)
+            tokenText = "<missing EOF>";
+        else
+            tokenText = "<missing " + recognizer.getTokenNames()[expectedTokenType] + ">";
+        Token current = currentSymbol;
+        if (current.getType() == Token.EOF) {
+            current = recognizer.getInputStream().LT(-1);
+        }
+        return _factory.create(current.getTokenSource(), expectedTokenType, tokenText, Token.DEFAULT_CHANNEL, -1, -1, current.getLine(), current.getCharPositionInLine());
+    }
+
+    public IntervalSet getExpectedTokens(Parser recognizer) {
+        return recognizer.getExpectedTokens();
+    }
+
+    public String getTokenErrorDisplay(Token t) {
+        if (t == null)
+            return "<no token>";
+        String s = getSymbolText(t);
+        if (s == null) {
+            if (getSymbolType(t) == Token.EOF) {
+                s = "<EOF>";
+            } else {
+                s = "<" + getSymbolType(t) + ">";
+            }
+        }
+        return escapeWSAndQuote(s);
+    }
+
+    protected String getSymbolText(@NotNull Token symbol) {
+        if (symbol instanceof Token) {
+            return ((Token) symbol).getText();
+        } else {
+            return symbol.toString();
+        }
+    }
+
+    protected int getSymbolType(@NotNull Token symbol) {
+        if (symbol instanceof Token) {
+            return ((Token) symbol).getType();
+        } else {
+            return Token.INVALID_TYPE;
+        }
+    }
+
+    protected String escapeWSAndQuote(String s) {
+        s = s.replaceAll("\n", "\\\\n");
+        s = s.replaceAll("\r", "\\\\r");
+        s = s.replaceAll("\t", "\\\\t");
+        return "'" + s + "'";
+    }
+
+    protected IntervalSet getErrorRecoverySet(Parser recognizer) {
+        ATN atn = recognizer.getInterpreter().atn;
+        RuleContext ctx = recognizer._ctx;
+        IntervalSet recoverSet = new IntervalSet();
+        while (ctx != null && ctx.invokingState >= 0) {
+            ATNState invokingState = atn.states.get(ctx.invokingState);
+            RuleTransition rt = (RuleTransition) invokingState.transition(0);
+            IntervalSet follow = atn.nextTokens(rt.followState);
+            recoverSet.addAll(follow);
+            ctx = ctx.parent;
+        }
+        recoverSet.remove(Token.EPSILON);
+        return recoverSet;
+    }
+
+    public void consumeUntil(Parser recognizer, IntervalSet set) {
+        int ttype = recognizer.getInputStream().LA(1);
+        while (ttype != Token.EOF && !set.contains(ttype)) {
+            recognizer.consume();
+            ttype = recognizer.getInputStream().LA(1);
+        }
+    }
+}

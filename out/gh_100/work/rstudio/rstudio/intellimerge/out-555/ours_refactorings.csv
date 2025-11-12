@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.85;155-199;org.rstudio.studio.client.workbench.views.source.editors.text.themes.AceThemes.applyTheme(Document, String);63-111;org.rstudio.studio.client.workbench.views.source.editors.text.themes.AceThemes.applyTheme(Document, AceTheme)
+Change Method Signature;method;0.77;201-204;org.rstudio.studio.client.workbench.views.source.editors.text.themes.AceThemes.applyTheme(String);113-116;org.rstudio.studio.client.workbench.views.source.editors.text.themes.AceThemes.applyTheme(AceTheme)

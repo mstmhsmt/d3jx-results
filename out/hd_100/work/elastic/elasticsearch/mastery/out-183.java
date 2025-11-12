@@ -1,0 +1,91 @@
+package org.elasticsearch.search.aggregations.metrics.min;
+
+import org.elasticsearch.common.inject.internal.Nullable;
+import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.io.stream.StreamOutput;
+import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.search.aggregations.AggregationStreams;
+import org.elasticsearch.search.aggregations.InternalAggregation;
+import org.elasticsearch.search.aggregations.metrics.InternalNumericMetricsAggregation;
+import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
+import org.elasticsearch.search.aggregations.support.format.ValueFormatterStreams;
+import java.io.IOException;
+import java.util.Map;
+import java.util.List;
+import org.elasticsearch.search.aggregations.reducers.Reducer;
+
+public class InternalMin extends InternalNumericMetricsAggregation.SingleValue implements Min {
+
+    public final static Type TYPE = new Type("min");
+
+    public final static AggregationStreams.Stream STREAM = new AggregationStreams.Stream() {
+
+        @Override
+        public InternalMin readResult(StreamInput in) throws IOException {
+            InternalMin result = new InternalMin();
+            result.readFrom(in);
+            return result;
+        }
+    };
+
+    public static void registerStreams() {
+        AggregationStreams.registerStream(STREAM, TYPE.stream());
+    }
+
+    private double min;
+
+    InternalMin() {
+    }
+
+    public InternalMin(String name, double min, @Nullable ValueFormatter formatter, List<Reducer> reducers, Map<String, Object> metaData) {
+        super(name, reducers, metaData);
+        this.min = min;
+        this.valueFormatter = formatter;
+    }
+
+    @Override
+    public double value() {
+        return min;
+    }
+
+    @Override
+    public double getValue() {
+        return min;
+    }
+
+    @Override
+    public Type type() {
+        return TYPE;
+    }
+
+    @Override
+    public InternalMin doReduce(List<InternalAggregation> aggregations, ReduceContext reduceContext) {
+        double min = Double.POSITIVE_INFINITY;
+        for (InternalAggregation aggregation : aggregations) {
+            min = Math.min(min, ((InternalMin) aggregation).min);
+        }
+        return new InternalMin(getName(), min, this.valueFormatter, reducers(), getMetaData());
+    }
+
+    @Override
+    protected void doReadFrom(StreamInput in) throws IOException {
+        valueFormatter = ValueFormatterStreams.readOptional(in);
+        min = in.readDouble();
+    }
+
+    @Override
+    protected void doWriteTo(StreamOutput out) throws IOException {
+        ValueFormatterStreams.writeOptional(valueFormatter, out);
+        out.writeDouble(min);
+    }
+
+    @Override
+    public XContentBuilder doXContentBody(XContentBuilder builder, Params params) throws IOException {
+        boolean hasValue = !Double.isInfinite(min);
+        builder.field(CommonFields.VALUE, hasValue ? min : null);
+        if (hasValue && valueFormatter != null) {
+            builder.field(CommonFields.VALUE_AS_STRING, valueFormatter.format(min));
+        }
+        return builder;
+    }
+}

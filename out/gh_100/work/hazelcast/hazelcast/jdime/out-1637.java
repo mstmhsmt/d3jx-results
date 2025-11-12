@@ -1,0 +1,156 @@
+package com.hazelcast.semaphore;
+import com.hazelcast.core.HazelcastException;
+import com.hazelcast.core.ISemaphore;
+import com.hazelcast.monitor.LocalSemaphoreStats;
+import com.hazelcast.spi.Invocation;
+import com.hazelcast.spi.NodeEngine;
+import java.util.Map;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * @ali 1/22/13
+ */
+public class SemaphoreProxy implements ISemaphore {
+  final String name;
+
+  final NodeEngine nodeEngine;
+
+  final SemaphoreService service;
+
+  final int partitionId;
+
+  public SemaphoreProxy(String name, SemaphoreService service, NodeEngine nodeEngine) {
+    this.name = name;
+    this.service = service;
+    this.nodeEngine = nodeEngine;
+    this.partitionId = nodeEngine.getPartitionService().getPartitionId(nodeEngine.toData(name));
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  public boolean init(int permits) {
+    checkNegative(permits);
+    try {
+      return (Boolean) invoke(new InitOperation(name, permits));
+    } catch (Throwable t) {
+      throw new HazelcastException(t);
+    }
+  }
+
+  public void acquire() throws InterruptedException {
+    acquire(1);
+  }
+
+  public void acquire(int permits) throws InterruptedException {
+    checkNegative(permits);
+    try {
+      invoke(new AcquireOperation(name, permits, -1));
+    } catch (Throwable t) {
+      throw new HazelcastException(t);
+    }
+  }
+
+  public int availablePermits() {
+    try {
+      return (Integer) invoke(new AvailableOperation(name));
+    } catch (Throwable t) {
+      throw new HazelcastException(t);
+    }
+  }
+
+  public int drainPermits() {
+    try {
+      return (Integer) invoke(new DrainOperation(name));
+    } catch (Throwable t) {
+      throw new HazelcastException(t);
+    }
+  }
+
+  public void reducePermits(int reduction) {
+    checkNegative(reduction);
+    try {
+      invoke(new ReduceOperation(name, reduction));
+    } catch (Throwable t) {
+      throw new HazelcastException(t);
+    }
+  }
+
+  public void release() {
+    release(1);
+  }
+
+  public void release(int permits) {
+    checkNegative(permits);
+    try {
+      invoke(new ReleaseOperation(name, permits));
+    } catch (Throwable t) {
+      throw new HazelcastException(t);
+    }
+  }
+
+  public boolean tryAcquire() {
+    try {
+      return tryAcquire(1, 0, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+      return false;
+    }
+  }
+
+  public boolean tryAcquire(int permits) {
+    try {
+      return tryAcquire(permits, 0, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+      return false;
+    }
+  }
+
+  public boolean tryAcquire(long timeout, TimeUnit unit) throws InterruptedException {
+    return tryAcquire(1, timeout, unit);
+  }
+
+  public boolean tryAcquire(int permits, long timeout, TimeUnit unit) throws InterruptedException {
+    checkNegative(permits);
+    try {
+      return (Boolean) invoke(new AcquireOperation(name, permits, unit.toMillis(timeout)));
+    } catch (Throwable t) {
+      throw new HazelcastException(t);
+    }
+  }
+
+  public LocalSemaphoreStats getLocalSemaphoreStats() {
+    for (Map.Entry<String, Permit> entry : service.getPermitMap().entrySet()) {
+      System.out.println("name: " + entry.getKey());
+      System.out.println("permit: " + entry.getValue());
+      System.out.println("-------------------------------");
+    }
+    return null;
+  }
+
+  public Object getId() {
+    return name;
+  }
+
+  public void destroy() {
+  }
+
+  private <T extends java.lang.Object> T invoke(SemaphoreOperation operation) {
+    try {
+      Invocation inv = nodeEngine.getOperationService().createInvocationBuilder(SemaphoreService.SERVICE_NAME, operation, partitionId).build();
+      Future f = inv.invoke();
+      return (T) nodeEngine.toObject(f.get());
+    } catch (Throwable throwable) {
+      throw new RuntimeException(throwable);
+    }
+  }
+
+  private void checkNegative(int permits) {
+    if (permits < 0) {
+      throw new IllegalStateException("Value cannot be negative");
+    }
+  }
+}

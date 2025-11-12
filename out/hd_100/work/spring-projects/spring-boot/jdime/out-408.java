@@ -1,0 +1,162 @@
+package org.springframework.boot.jdbc;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
+
+/**
+ * Enumeration of common database drivers.
+ *
+ * @author Phillip Webb
+ * @author Maciej Walkowiak
+ * @author Marten Deinum
+ * @author Stephane Nicoll
+ * @since 1.4.0
+ */public enum DatabaseDriver {
+  UNKNOWN("unknown", null, null),
+  DERBY("derby", "Apache Derby", "org.apache.derby.jdbc.EmbeddedDriver", "org.apache.derby.jdbc.EmbeddedXADataSource", "SELECT 1 FROM SYSIBM.SYSDUMMY1"),
+  H2("h2", "H2", "org.h2.Driver", "org.h2.jdbcx.JdbcDataSource", "SELECT 1"),
+  HSQLDB("hsqldb", "HSQL Database Engine", "org.hsqldb.jdbc.JDBCDriver", "org.hsqldb.jdbc.pool.JDBCXADataSource", "SELECT COUNT(*) FROM INFORMATION_SCHEMA.SYSTEM_USERS"),
+  SQLITE("sqlite", "SQLite", "org.sqlite.JDBC"),
+  MYSQL("mysql", "MySQL", "com.mysql.jdbc.Driver", "com.mysql.jdbc.jdbc2.optional.MysqlXADataSource", "SELECT 1"),
+  MARIADB("mariadb", "MySQL", "org.mariadb.jdbc.Driver", "org.mariadb.jdbc.MariaDbDataSource", "SELECT 1"),
+  GAE("gae", null, "com.google.appengine.api.rdbms.AppEngineDriver"),
+  ORACLE("oracle", "Oracle", "oracle.jdbc.OracleDriver", "oracle.jdbc.xa.client.OracleXADataSource", "SELECT \'Hello\' from DUAL"),
+  POSTGRESQL("postgresql", "PostgreSQL", "org.postgresql.Driver", "org.postgresql.xa.PGXADataSource", "SELECT 1"),
+  JTDS("jtds", null, "net.sourceforge.jtds.jdbc.Driver"),
+  SQLSERVER("sqlserver", "SQL SERVER", "com.microsoft.sqlserver.jdbc.SQLServerDriver", "com.microsoft.sqlserver.jdbc.SQLServerXADataSource", "SELECT 1"),
+  FIREBIRD("firebird", "Firebird", "org.firebirdsql.jdbc.FBDriver", "org.firebirdsql.pool.FBConnectionPoolDataSource", "SELECT 1 FROM RDB$DATABASE") {
+    @Override protected Collection<String> getUrlPrefixes() {
+      return Collections.singleton("firebirdsql");
+    }
+
+    @Override protected boolean matchProductName(String productName) {
+      return super.matchProductName(productName) || productName.toLowerCase().startsWith("firebird");
+    }
+  },
+  DB2("db2", "DB2", "com.ibm.db2.jcc.DB2Driver", "com.ibm.db2.jcc.DB2XADataSource", "SELECT 1 FROM SYSIBM.SYSDUMMY1") {
+    @Override protected boolean matchProductName(String productName) {
+      return super.matchProductName(productName) || productName.toLowerCase().startsWith("db2/");
+    }
+  },
+  DB2_AS400("db2", "DB2 UDB for AS/400", "com.ibm.as400.access.AS400JDBCDriver", "com.ibm.as400.access.AS400JDBCXADataSource", "SELECT 1 FROM SYSIBM.SYSDUMMY1") {
+    @Override protected Collection<String> getUrlPrefixes() {
+      return Collections.singleton("as400");
+    }
+
+    @Override protected boolean matchProductName(String productName) {
+      return super.matchProductName(productName) || productName.toLowerCase().contains("as/400");
+    }
+  },
+  TERADATA("teradata", "Teradata", "com.teradata.jdbc.TeraDriver"),
+  INFORMIX("informix", "Informix Dynamic Server", "com.informix.jdbc.IfxDriver", null, "select count(*) from systables") {
+    @Override protected Collection<String> getUrlPrefixes() {
+      return Arrays.asList("informix-sqli", "informix-direct");
+    }
+  }
+  ;
+
+  private final String id;
+
+  private final String productName;
+
+  private final String driverClassName;
+
+  private final String xaDataSourceClassName;
+
+  private final String validationQuery;
+
+  DatabaseDriver(String id, String name, String driverClassName) {
+    this(id, name, driverClassName, null);
+  }
+
+  DatabaseDriver(String id, String name, String driverClassName, String xaDataSourceClassName) {
+    this(id, name, driverClassName, xaDataSourceClassName, null);
+  }
+
+  DatabaseDriver(String id, String productName, String driverClassName, String xaDataSourceClassName, String validationQuery) {
+    this.id = id;
+    this.productName = productName;
+    this.driverClassName = driverClassName;
+    this.xaDataSourceClassName = xaDataSourceClassName;
+    this.validationQuery = validationQuery;
+  }
+
+  /**
+	 * Return the identifier of this driver.
+	 * @return the identifier
+	 */
+  public String getId() {
+    return this.id;
+  }
+
+  protected boolean matchProductName(String productName) {
+    return this.productName != null && this.productName.equalsIgnoreCase(productName);
+  }
+
+  protected Collection<String> getUrlPrefixes() {
+    return Collections.singleton(this.name().toLowerCase());
+  }
+
+  /**
+	 * Return the driver class name.
+	 * @return the class name or {@code null}
+	 */
+  public String getDriverClassName() {
+    return this.driverClassName;
+  }
+
+  /**
+	 * Return the XA driver source class name.
+	 * @return the class name or {@code null}
+	 */
+  public String getXaDataSourceClassName() {
+    return this.xaDataSourceClassName;
+  }
+
+  /**
+	 * Return the validation query.
+	 * @return the validation query or {@code null}
+	 */
+  public String getValidationQuery() {
+    return this.validationQuery;
+  }
+
+  /**
+	 * Find a {@link DatabaseDriver} for the given URL.
+	 * @param url JDBC URL
+	 * @return the database driver or {@link #UNKNOWN} if not found
+	 */
+  public static DatabaseDriver fromJdbcUrl(String url) {
+    if (StringUtils.hasLength(url)) {
+      Assert.isTrue(url.startsWith("jdbc"), "URL must start with \'jdbc\'");
+      String urlWithoutPrefix = url.substring("jdbc".length()).toLowerCase();
+      for (DatabaseDriver driver : values()) {
+        for (String urlPrefix : driver.getUrlPrefixes()) {
+          String prefix = ":" + urlPrefix + ":";
+          if (driver != UNKNOWN && urlWithoutPrefix.startsWith(prefix)) {
+            return driver;
+          }
+        }
+      }
+    }
+    return UNKNOWN;
+  }
+
+  /**
+	 * Find a {@link DatabaseDriver} for the given product name.
+	 * @param productName product name
+	 * @return the database driver or {@link #UNKNOWN} if not found
+	 */
+  public static DatabaseDriver fromProductName(String productName) {
+    if (StringUtils.hasLength(productName)) {
+      for (DatabaseDriver candidate : values()) {
+        if (candidate.matchProductName(productName)) {
+          return candidate;
+        }
+      }
+    }
+    return UNKNOWN;
+  }
+}

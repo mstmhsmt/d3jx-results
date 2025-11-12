@@ -1,0 +1,4 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.85;962-996;org.antlr.v4.runtime.atn.ParserATNSimulator.predTransition(ATNConfig, PredicateTransition, boolean);975-1004;org.antlr.v4.runtime.atn.ParserATNSimulator.predTransition(ATNConfig, PredicateTransition, boolean, boolean)
+Change Method Signature;method;0.85;939-954;org.antlr.v4.runtime.atn.ParserATNSimulator.getEpsilonTarget(ATNConfig, Transition, boolean);952-967;org.antlr.v4.runtime.atn.ParserATNSimulator.getEpsilonTarget(ATNConfig, Transition, boolean, boolean)
+Extract Method;method;0.84;843-931;org.antlr.v4.runtime.atn.ParserATNSimulator.closure(ATNConfig, ATNConfigSet, Set, boolean, boolean, boolean);847-944;org.antlr.v4.runtime.atn.ParserATNSimulator.closure(ATNConfig, ATNConfigSet, Set, boolean, boolean, boolean, int)

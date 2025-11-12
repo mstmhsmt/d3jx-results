@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Constructor Signature;constructor;0.84;64-84;voldemort.server.socket.SocketServer.SocketServer(String, int, int, int, int, RequestHandler);68-88;voldemort.server.socket.SocketServer.SocketServer(int, int, int, int, RequestHandlerFactory)

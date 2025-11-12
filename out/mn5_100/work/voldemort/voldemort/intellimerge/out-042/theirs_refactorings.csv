@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.71;110-134;voldemort.xml.StoreDefinitionsMapper.readStoreList(Reader);114-140;voldemort.xml.StoreDefinitionsMapper.readStoreList(Reader, boolean)

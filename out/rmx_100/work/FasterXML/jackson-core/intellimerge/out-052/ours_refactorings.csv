@@ -1,0 +1,4 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.9;283-374;com.fasterxml.jackson.core.io.JsonStringEncoder.quoteAsUTF8(String);202-293;com.fasterxml.jackson.core.io.JsonStringEncoder.quoteAsUTF8(CharSequence)
+Change Method Signature;method;0.91;380-465;com.fasterxml.jackson.core.io.JsonStringEncoder.encodeAsUTF8(String);299-384;com.fasterxml.jackson.core.io.JsonStringEncoder.encodeAsUTF8(CharSequence)
+Change Method Signature;method;0.91;166-236;com.fasterxml.jackson.core.io.JsonStringEncoder.quoteAsString(CharSequence);95-157;com.fasterxml.jackson.core.io.JsonStringEncoder.quoteAsCharArray(CharSequence)

@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.74;974-1047;org.apache.cassandra.db.compaction.CompactionManager.doAntiCompaction(ColumnFamilyStore, Collection, Collection, long);1036-1121;org.apache.cassandra.db.compaction.CompactionManager.antiCompactGroup(ColumnFamilyStore, Collection, Collection, long)

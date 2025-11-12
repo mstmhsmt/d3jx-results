@@ -1,0 +1,4 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.95;1366-1408;org.elasticsearch.cluster.metadata.MetadataIndexTemplateService.collectMappings(ComposableIndexTemplate, Map, String);1371-1417;org.elasticsearch.cluster.metadata.MetadataIndexTemplateService.collectMappings(ComposableIndexTemplate, Map, Map, String)
+Inline Method;method;0.96;693-758;org.elasticsearch.cluster.metadata.MetadataIndexTemplateService.validateIndexTemplateV2(String, ComposableIndexTemplate, ClusterState);1351-1361;org.elasticsearch.cluster.metadata.MetadataIndexTemplateService.collectMappings(ClusterState, String, String)
+Extract Method;method;0.67;1430-1438;org.elasticsearch.cluster.metadata.MetadataIndexTemplateService.resolveSettings(Metadata, String);1443-1455;org.elasticsearch.cluster.metadata.MetadataIndexTemplateService.resolveSettings(Metadata, String, Map)

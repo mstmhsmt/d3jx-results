@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.66;59-64;io.shardingjdbc.orchestration.api.OrchestrationMasterSlaveDataSourceFactory.createDataSource(Map, MasterSlaveRuleConfiguration, OrchestrationConfiguration);60-66;io.shardingjdbc.orchestration.api.OrchestrationMasterSlaveDataSourceFactory.createDataSource(Map, MasterSlaveRuleConfiguration, Map, OrchestrationConfiguration)

@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.86;219-243;voldemort.server.protocol.admin.AdminServiceRequestHandler.handleGetROMaxVersion(VAdminProto.GetROMaxVersionRequest);256-288;voldemort.server.protocol.admin.AdminServiceRequestHandler.handleGetROMaxVersionDir(VAdminProto.GetROMaxVersionDirRequest)

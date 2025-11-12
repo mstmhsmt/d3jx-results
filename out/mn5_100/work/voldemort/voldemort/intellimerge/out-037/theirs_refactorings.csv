@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Constructor Signature;constructor;0.64;24-26;voldemort.server.protocol.vold.VoldemortNativeRequestHandler.VoldemortNativeRequestHandler(ErrorCodeMapper, StoreRepository);32-39;voldemort.server.protocol.vold.VoldemortNativeRequestHandler.VoldemortNativeRequestHandler(ErrorCodeMapper, StoreRepository, int)

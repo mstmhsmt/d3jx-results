@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.79;296-305;voldemort.store.bdb.BdbStorageEngine.getStats();317-326;voldemort.store.bdb.BdbStorageEngine.getStats(boolean)
+Change Field Signature;field;0.91;73-73;voldemort.store.bdb.BdbStorageEngine.serializer;74-74;voldemort.store.bdb.BdbStorageEngine.versionedSerializer

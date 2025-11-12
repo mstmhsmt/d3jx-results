@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Type Signature;class;0.72;30-53;org.jasig.cas.authentication.principal.SimplePrincipalTests;33-45;org.jasig.cas.authentication.principal.SimplePrincipalFactoryTests

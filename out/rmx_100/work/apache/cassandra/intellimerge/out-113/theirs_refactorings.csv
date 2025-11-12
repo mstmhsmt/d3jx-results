@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.68;246-258;org.apache.cassandra.utils.memory.BufferPool.GlobalPool.get();271-283;org.apache.cassandra.utils.memory.BufferPool.GlobalPool.getInternal()

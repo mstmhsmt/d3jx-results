@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.84;73-232;org.deeplearning4j.nn.layers.recurrent.GravesLSTM.backwardGradient(INDArray, Layer, Gradient, INDArray);70-246;org.deeplearning4j.nn.layers.recurrent.GravesLSTM.backpropGradient(Gradient, Layer)
+Extract Method;method;0.68;239-357;org.deeplearning4j.nn.layers.recurrent.GravesLSTM.activate(INDArray, boolean);261-374;org.deeplearning4j.nn.layers.recurrent.GravesLSTM.activateHelper(INDArray, boolean)

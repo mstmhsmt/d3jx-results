@@ -1,0 +1,4 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.81;741-764;com.redhat.rhn.domain.errata.ErrataFactory.lookupByAdvisoryId(String);746-771;com.redhat.rhn.domain.errata.ErrataFactory.lookupByAdvisoryId(String, Org)
+Change Method Signature;method;0.95;126-192;com.redhat.rhn.domain.errata.ErrataFactory.lookupByIdentifier(String);127-193;com.redhat.rhn.domain.errata.ErrataFactory.lookupByIdentifier(String, Org)
+Change Method Signature;method;0.81;712-734;com.redhat.rhn.domain.errata.ErrataFactory.lookupByAdvisory(String);714-738;com.redhat.rhn.domain.errata.ErrataFactory.lookupByAdvisory(String, Org)

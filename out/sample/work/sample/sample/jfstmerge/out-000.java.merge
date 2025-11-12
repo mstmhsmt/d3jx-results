@@ -1,0 +1,19 @@
+class Sample
+{
+
+  @override
+<<<<<<< MINE
+  protected int adjustSeekIndex(int i) {
+    return skipOffTokenChannels(i);
+||||||| BASE
+  public void reset() {
+    super.reset();
+    p = skipOffTokenChannels(p);
+=======
+  public void reset() {
+    super.reset();
+    p = nextTokenOnChannels(p, channel);
+>>>>>>> YOURS
+  }
+
+}

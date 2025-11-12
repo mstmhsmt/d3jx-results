@@ -1,0 +1,77 @@
+package com.github._1c_syntax.bsl.languageserver.providers;
+
+import com.github._1c_syntax.bsl.languageserver.diagnostics.BSLDiagnostic;
+import com.github._1c_syntax.bsl.languageserver.diagnostics.LineLengthDiagnostic;
+import com.github._1c_syntax.bsl.languageserver.diagnostics.NumberOfOptionalParamsDiagnostic;
+import com.github._1c_syntax.bsl.languageserver.diagnostics.metadata.DiagnosticMetadata;
+import com.github._1c_syntax.bsl.languageserver.diagnostics.metadata.DiagnosticParameter;
+import org.junit.jupiter.api.Test;
+import java.util.List;
+import java.util.Map;
+import java.util.MissingResourceException;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+
+class DiagnosticProviderTest {
+
+    @Test
+    void configureNullDryRun() {
+        DiagnosticProvider diagnosticProvider = new DiagnosticProvider();
+        List<BSLDiagnostic> diagnosticInstances = diagnosticProvider.getDiagnosticInstances();
+        diagnosticInstances.forEach(diagnostic -> diagnostic.configure(null));
+    }
+
+    @Test
+    void testAllDiagnosticsHaveMetadataAnnotation() {
+        List<Class<? extends BSLDiagnostic>> diagnosticClasses = DiagnosticProvider.getDiagnosticClasses();
+        assertThat(diagnosticClasses).allMatch((Class<? extends BSLDiagnostic> diagnosticClass) -> diagnosticClass.isAnnotationPresent(DiagnosticMetadata.class));
+    }
+
+    @Test
+    void testAddDiagnosticsHaveDiagnosticName() {
+        List<Class<? extends BSLDiagnostic>> diagnosticClasses = DiagnosticProvider.getDiagnosticClasses();
+        assertThatCode(() -> diagnosticClasses.forEach(diagnosticClass -> {
+            try {
+                DiagnosticProvider.getDiagnosticName(diagnosticClass);
+            } catch (MissingResourceException e) {
+                throw new RuntimeException(diagnosticClass.getSimpleName() + " does not have diagnosticName", e);
+            }
+        })).doesNotThrowAnyException();
+    }
+
+    @Test
+    void testAllDiagnosticsHaveDiagnosticMessage() {
+        DiagnosticProvider diagnosticProvider = new DiagnosticProvider();
+        List<BSLDiagnostic> diagnosticInstances = diagnosticProvider.getDiagnosticInstances();
+        assertThatCode(() -> diagnosticInstances.forEach(diagnostic -> {
+            try {
+                diagnostic.getDiagnosticMessage();
+            } catch (MissingResourceException e) {
+                throw new RuntimeException(diagnostic.getClass().getSimpleName() + " does not have diagnosticMessage", e);
+            }
+        })).doesNotThrowAnyException();
+    }
+
+    @Test
+    void testAllDiagnosticsHaveDescriptionResource() {
+        DiagnosticProvider diagnosticProvider = new DiagnosticProvider();
+        List<Class<? extends BSLDiagnostic>> diagnosticClasses = DiagnosticProvider.getDiagnosticClasses();
+        assertThat(diagnosticClasses).allMatch(diagnosticClass -> !"".equals(diagnosticProvider.getDiagnosticDescription(diagnosticClass)));
+    }
+
+    @Test
+    void testDiagnosticParametrs() {
+        Map<String, DiagnosticParameter> params = DiagnosticProvider.getDiagnosticParameters(NumberOfOptionalParamsDiagnostic.class);
+        assertThat(params).hasSize(1);
+        assertThat(DiagnosticProvider.getDefaultValue(params.get("maxOptionalParamsCount"))).isEqualTo(3);
+        assertThat(params.get("maxOptionalParamsCount").defaultValue()).isEqualTo("3");
+        Map<String, DiagnosticParameter> lineLengthParams = DiagnosticProvider.getDiagnosticParameters(LineLengthDiagnostic.class);
+        assertThat(lineLengthParams.get("maxLineLength").defaultValue()).isEqualTo("120");
+    }
+
+    @Test
+    void testAllDiagnosticsHaveTags() {
+        List<Class<? extends BSLDiagnostic>> diagnosticClasses = DiagnosticProvider.getDiagnosticClasses();
+        assertThat(diagnosticClasses).allMatch((Class<? extends BSLDiagnostic> diagnosticClass) -> DiagnosticProvider.getDiagnosticTags(diagnosticClass).size() > 0 && DiagnosticProvider.getDiagnosticTags(diagnosticClass).size() <= 3);
+    }
+}

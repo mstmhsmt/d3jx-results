@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.92;100-102;gov.nasa.arc.mct.fastplot.bridge.TestLegendEntryPopup.getSubMenu(JPopupMenu);105-107;gov.nasa.arc.mct.fastplot.bridge.TestLegendEntryPopup.getSubMenu(JPopupMenu, int)

@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.88;349-387;com.hazelcast.config.AbstractXmlConfigHelper.fillOffHeapMemoryConfig(Node, OffHeapMemoryConfig);349-387;com.hazelcast.config.AbstractXmlConfigHelper.fillNativeMemoryConfig(Node, NativeMemoryConfig)

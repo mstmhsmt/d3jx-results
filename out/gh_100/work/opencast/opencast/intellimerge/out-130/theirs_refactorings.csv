@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Field Signature;field;0.97;180-180;org.opencastproject.scheduler.impl.SchedulerServiceImpl.CFG_KEY_LAST_MODIFED_CACHE_EXPIRE;180-180;org.opencastproject.scheduler.impl.SchedulerServiceImpl.CFG_KEY_LAST_MODIFIED_CACHE_EXPIRE

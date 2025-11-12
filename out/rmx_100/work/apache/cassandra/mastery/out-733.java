@@ -1,0 +1,470 @@
+package org.apache.cassandra.db.index;
+
+import java.nio.ByteBuffer;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.apache.cassandra.config.ColumnDefinition;
+import org.apache.cassandra.db.compaction.CompactionManager;
+import org.apache.cassandra.db.filter.ExtendedFilter;
+import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.io.sstable.ReducingKeyIterator;
+import org.apache.cassandra.io.sstable.SSTableReader;
+import org.apache.cassandra.utils.FBUtilities;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.Future;
+import org.apache.cassandra.config.IndexType;
+import org.apache.cassandra.db.Cell;
+import org.apache.cassandra.db.ColumnFamily;
+import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.db.IndexExpression;
+import org.apache.cassandra.db.Row;
+import org.apache.cassandra.db.SystemKeyspace;
+import org.apache.cassandra.db.composites.CellName;
+import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.utils.concurrent.OpOrder;
+
+public class SecondaryIndexManager {
+
+    private static final Logger logger = LoggerFactory.getLogger(SecondaryIndexManager.class);
+
+    private final ConcurrentNavigableMap<ByteBuffer, SecondaryIndex> indexesByColumn;
+
+    private final ConcurrentMap<Class<? extends SecondaryIndex>, SecondaryIndex> rowLevelIndexMap;
+
+    private final Set<SecondaryIndex> allIndexes;
+
+    final public ColumnFamilyStore baseCfs;
+
+    public SecondaryIndexManager(ColumnFamilyStore baseCfs) {
+        indexesByColumn = new ConcurrentSkipListMap<>();
+        rowLevelIndexMap = new ConcurrentHashMap<>();
+        allIndexes = Collections.newSetFromMap(new ConcurrentHashMap<SecondaryIndex, Boolean>());
+        this.baseCfs = baseCfs;
+    }
+
+    public void reload() {
+        Collection<ByteBuffer> indexedColumnNames = indexesByColumn.keySet();
+        for (ByteBuffer indexedColumn : indexedColumnNames) {
+            ColumnDefinition def = baseCfs.metadata.getColumnDefinition(indexedColumn);
+            if (def == null || def.getIndexType() == null)
+                removeIndexedColumn(indexedColumn);
+        }
+        for (ColumnDefinition cdef : baseCfs.metadata.allColumns()) if (cdef.getIndexType() != null && !indexedColumnNames.contains(cdef.name.bytes))
+            addIndexedColumn(cdef);
+        for (SecondaryIndex index : allIndexes) index.reload();
+    }
+
+    public Set<String> allIndexesNames() {
+        Set<String> names = new HashSet<>(allIndexes.size());
+        for (SecondaryIndex index : allIndexes) names.add(index.getIndexName());
+        return names;
+    }
+
+    public void maybeBuildSecondaryIndexes(Collection<SSTableReader> sstables, Set<String> idxNames) {
+        if (idxNames.isEmpty())
+            return;
+        logger.info(String.format("Submitting index build of %s for data in %s", idxNames, StringUtils.join(sstables, ", ")));
+        SecondaryIndexBuilder builder = new SecondaryIndexBuilder(baseCfs, idxNames, new ReducingKeyIterator(sstables));
+        Future<?> future = CompactionManager.instance.submitIndexBuild(builder);
+        FBUtilities.waitOnFuture(future);
+        flushIndexesBlocking();
+        logger.info("Index build of {} complete", idxNames);
+    }
+
+    public boolean indexes(CellName name, Set<SecondaryIndex> indexes) {
+        boolean matching = false;
+        for (SecondaryIndex index : indexes) {
+            if (index.indexes(name)) {
+                matching = true;
+                break;
+            }
+        }
+        return matching;
+    }
+
+    public Set<SecondaryIndex> indexFor(CellName name, Set<SecondaryIndex> indexes) {
+        Set<SecondaryIndex> matching = null;
+        for (SecondaryIndex index : indexes) {
+            if (index.indexes(name)) {
+                if (matching == null)
+                    matching = new HashSet<>();
+                matching.add(index);
+            }
+        }
+        return matching == null ? Collections.<SecondaryIndex>emptySet() : matching;
+    }
+
+    public boolean indexes(CellName name) {
+        return indexes(name, allIndexes);
+    }
+
+    public Set<SecondaryIndex> indexFor(CellName name) {
+        return indexFor(name, allIndexes);
+    }
+
+    public boolean hasIndexFor(List<IndexExpression> clause) {
+        if (clause == null || clause.isEmpty())
+            return false;
+        for (SecondaryIndexSearcher searcher : getIndexSearchersForQuery(clause)) if (searcher.canHandleIndexClause(clause))
+            return true;
+        return false;
+    }
+
+    public void removeIndexedColumn(ByteBuffer column) {
+        SecondaryIndex index = indexesByColumn.remove(column);
+        if (index == null)
+            return;
+        if (index instanceof PerRowSecondaryIndex) {
+            index.removeColumnDef(column);
+            if (index.getColumnDefs().isEmpty()) {
+                allIndexes.remove(index);
+                rowLevelIndexMap.remove(index.getClass());
+            }
+        } else {
+            allIndexes.remove(index);
+        }
+        index.removeIndex(column);
+        SystemKeyspace.setIndexRemoved(baseCfs.metadata.ksName, index.getNameForSystemKeyspace(column));
+    }
+
+    public synchronized Future<?> addIndexedColumn(ColumnDefinition cdef) {
+        if (indexesByColumn.containsKey(cdef.name.bytes))
+            return null;
+        assert cdef.getIndexType() != null;
+        SecondaryIndex index;
+        try {
+            index = SecondaryIndex.createInstance(baseCfs, cdef);
+        } catch (ConfigurationException e) {
+            throw new RuntimeException(e);
+        }
+        if (index instanceof PerRowSecondaryIndex) {
+            SecondaryIndex currentIndex = rowLevelIndexMap.get(index.getClass());
+            if (currentIndex == null) {
+                rowLevelIndexMap.put(index.getClass(), index);
+                index.init();
+            } else {
+                index = currentIndex;
+                index.addColumnDef(cdef);
+                logger.info("Creating new index : {}", cdef);
+            }
+        } else {
+            if (cdef.getIndexType() == IndexType.CUSTOM && index instanceof AbstractSimplePerColumnSecondaryIndex)
+                throw new RuntimeException("Cannot use a subclass of AbstractSimplePerColumnSecondaryIndex as a CUSTOM index, as they assume they are CFS backed");
+            index.init();
+        }
+        indexesByColumn.put(cdef.name.bytes, index);
+        allIndexes.add(index);
+        if (index.isIndexBuilt(cdef.name.bytes))
+            return null;
+        return index.buildIndexAsync();
+    }
+
+    public SecondaryIndex getIndexForColumn(ByteBuffer column) {
+        return indexesByColumn.get(column);
+    }
+
+    public void invalidate() {
+        for (SecondaryIndex index : allIndexes) index.invalidate();
+    }
+
+    public void flushIndexesBlocking() {
+        List<Future<?>> wait = new ArrayList<>();
+        synchronized (baseCfs.getDataTracker()) {
+            for (SecondaryIndex index : allIndexes) if (index.getIndexCfs() != null)
+                wait.add(index.getIndexCfs().forceFlush());
+        }
+        for (SecondaryIndex index : allIndexes) if (index.getIndexCfs() == null)
+            index.forceBlockingFlush();
+        FBUtilities.waitOnFutures(wait);
+    }
+
+    public List<String> getBuiltIndexes() {
+        List<String> indexList = new ArrayList<>();
+        for (Map.Entry<ByteBuffer, SecondaryIndex> entry : indexesByColumn.entrySet()) {
+            SecondaryIndex index = entry.getValue();
+            if (index.isIndexBuilt(entry.getKey()))
+                indexList.add(entry.getValue().getIndexName());
+        }
+        return indexList;
+    }
+
+    public Set<ColumnFamilyStore> getIndexesBackedByCfs() {
+        Set<ColumnFamilyStore> cfsList = new HashSet<>();
+        for (SecondaryIndex index : allIndexes) {
+            ColumnFamilyStore cfs = index.getIndexCfs();
+            if (cfs != null)
+                cfsList.add(cfs);
+        }
+        return cfsList;
+    }
+
+    public Set<SecondaryIndex> getIndexesNotBackedByCfs() {
+        Set<SecondaryIndex> indexes = Collections.newSetFromMap(new IdentityHashMap<SecondaryIndex, Boolean>());
+        for (SecondaryIndex index : allIndexes) if (index.getIndexCfs() == null)
+            indexes.add(index);
+        return indexes;
+    }
+
+    public Set<SecondaryIndex> getIndexes() {
+        return allIndexes;
+    }
+
+    public boolean hasIndexes() {
+        return !indexesByColumn.isEmpty();
+    }
+
+    public void indexRow(ByteBuffer key, ColumnFamily cf, OpOrder.Group opGroup) {
+        Set<Class<? extends SecondaryIndex>> appliedRowLevelIndexes = null;
+        for (SecondaryIndex index : allIndexes) {
+            if (index instanceof PerRowSecondaryIndex) {
+                if (appliedRowLevelIndexes == null)
+                    appliedRowLevelIndexes = new HashSet<>();
+                if (appliedRowLevelIndexes.add(index.getClass()))
+                    ((PerRowSecondaryIndex) index).index(key, cf);
+            } else {
+                for (Cell cell : cf) if (column.isLive(System.currentTimeMillis()) && index.indexes(cell.name()))
+                    ((PerColumnSecondaryIndex) index).insert(key, cell, opGroup);
+            }
+        }
+    }
+
+    public void deleteFromIndexes(DecoratedKey key, List<Cell> indexedColumnsInRow, OpOrder.Group opGroup) {
+        Set<Class<? extends SecondaryIndex>> cleanedRowLevelIndexes = null;
+        for (Cell cell : indexedColumnsInRow) {
+            for (SecondaryIndex index : indexFor(cell.name())) {
+                if (index instanceof PerRowSecondaryIndex) {
+                    if (cleanedRowLevelIndexes == null)
+                        cleanedRowLevelIndexes = new HashSet<>();
+                    if (cleanedRowLevelIndexes.add(index.getClass()))
+                        ((PerRowSecondaryIndex) index).delete(key, opGroup);
+                } else {
+                    ((PerColumnSecondaryIndex) index).delete(key.getKey(), cell, opGroup);
+                }
+            }
+        }
+    }
+
+    public Updater updaterFor(DecoratedKey key, ColumnFamily cf, OpOrder.Group opGroup) {
+        return (indexesByColumn.isEmpty() && rowLevelIndexMap.isEmpty()) ? nullUpdater : new StandardUpdater(key, cf, opGroup);
+    }
+
+    public List<SecondaryIndexSearcher> getIndexSearchersForQuery(List<IndexExpression> clause) {
+        Map<String, Set<ByteBuffer>> groupByIndexType = new HashMap<>();
+        for (IndexExpression ix : clause) {
+            SecondaryIndex index = getIndexForColumn(ix.column);
+            if (index == null)
+                continue;
+            Set<ByteBuffer> columns = groupByIndexType.get(index.indexTypeForGrouping());
+            if (columns == null) {
+                columns = new HashSet<>();
+                groupByIndexType.put(index.indexTypeForGrouping(), columns);
+            }
+            columns.add(ix.column);
+        }
+        List<SecondaryIndexSearcher> indexSearchers = new ArrayList<>(groupByIndexType.size());
+        for (Set<ByteBuffer> column : groupByIndexType.values()) indexSearchers.add(getIndexForColumn(column.iterator().next()).createSecondaryIndexSearcher(column));
+        return indexSearchers;
+    }
+
+    public List<Row> search(ExtendedFilter filter) {
+        List<SecondaryIndexSearcher> indexSearchers = getIndexSearchersForQuery(filter.getClause());
+        if (indexSearchers.isEmpty())
+            return Collections.emptyList();
+        SecondaryIndexSearcher mostSelective = null;
+        long bestEstimate = Long.MAX_VALUE;
+        for (SecondaryIndexSearcher searcher : indexSearchers) {
+            SecondaryIndex highestSelectivityIndex = searcher.highestSelectivityIndex(filter.getClause());
+            long estimate = highestSelectivityIndex.estimateResultRows();
+            if (estimate <= bestEstimate) {
+                bestEstimate = estimate;
+                mostSelective = searcher;
+            }
+        }
+        return mostSelective.search(filter);
+    }
+
+    public Set<SecondaryIndex> getIndexesByNames(Set<String> idxNames) {
+        Set<SecondaryIndex> result = new HashSet<>();
+        for (SecondaryIndex index : allIndexes) if (idxNames.contains(index.getIndexName()))
+            result.add(index);
+        return result;
+    }
+
+    public void setIndexBuilt(Set<String> idxNames) {
+        for (SecondaryIndex index : getIndexesByNames(idxNames)) index.setIndexBuilt();
+    }
+
+    public void setIndexRemoved(Set<String> idxNames) {
+        for (SecondaryIndex index : getIndexesByNames(idxNames)) index.setIndexRemoved();
+    }
+
+    public boolean validate(Cell cell) {
+        for (SecondaryIndex index : indexFor(cell.name())) {
+            if (!index.validate(cell))
+                return false;
+        }
+        return true;
+    }
+
+    static public interface Updater {
+
+        public void updateRowLevelIndexes();
+
+        public void insert(Cell cell);
+
+        public void update(Cell oldCell, Cell cell);
+
+        public void remove(Cell current);
+    }
+
+    private final class StandardUpdater implements Updater {
+
+        private final DecoratedKey key;
+
+        private final ColumnFamily cf;
+
+        private final OpOrder.Group opGroup;
+
+        public StandardUpdater(DecoratedKey key, ColumnFamily cf, OpOrder.Group opGroup) {
+            this.key = key;
+            this.cf = cf;
+            this.opGroup = opGroup;
+        }
+
+        public void insert(Cell cell) {
+            if (!cell.isLive())
+                return;
+            for (SecondaryIndex index : indexFor(cell.name())) if (index instanceof PerColumnSecondaryIndex)
+                ((PerColumnSecondaryIndex) index).insert(key.getKey(), cell, opGroup);
+        }
+
+        public void update(Cell oldCell, Cell cell) {
+            if (oldCell.equals(cell))
+                return;
+            for (SecondaryIndex index : indexFor(cell.name())) {
+                if (index instanceof PerColumnSecondaryIndex) {
+                    if (cell.isLive()) {
+                        ((PerColumnSecondaryIndex) index).update(key.getKey(), oldCell, cell, opGroup);
+                    } else {
+                        if (shouldCleanupOldValue(oldCell, cell))
+                            ((PerColumnSecondaryIndex) index).delete(key.getKey(), oldCell, opGroup);
+                    }
+                }
+            }
+        }
+
+        public void remove(Cell cell) {
+            if (!cell.isLive())
+                return;
+            for (SecondaryIndex index : indexFor(cell.name())) if (index instanceof PerColumnSecondaryIndex)
+                ((PerColumnSecondaryIndex) index).delete(key.getKey(), cell, opGroup);
+        }
+
+        public void updateRowLevelIndexes() {
+            for (SecondaryIndex index : rowLevelIndexMap.values()) ((PerRowSecondaryIndex) index).index(key.getKey(), cf);
+        }
+    }
+
+    private final class GCUpdater implements Updater {
+
+        private final DecoratedKey key;
+
+        public GCUpdater(DecoratedKey key) {
+            this.key = key;
+        }
+
+        public void insert(Cell cell) {
+            throw new UnsupportedOperationException();
+        }
+
+        public void update(Cell oldCell, Cell newCell) {
+            throw new UnsupportedOperationException();
+        }
+
+        public void remove(Cell cell) {
+            if (!cell.isLive())
+                return;
+            for (SecondaryIndex index : indexFor(cell.name())) {
+                if (index instanceof PerColumnSecondaryIndex) {
+                    try (OpOrder.Group opGroup = baseCfs.keyspace.writeOrder.start()) {
+                        ((PerColumnSecondaryIndex) index).delete(key.getKey(), cell, opGroup);
+                    }
+                }
+            }
+        }
+
+        public void updateRowLevelIndexes() {
+            for (SecondaryIndex index : rowLevelIndexMap.values()) ((PerRowSecondaryIndex) index).index(key.getKey(), null);
+        }
+    }
+
+    static final public Updater nullUpdater = new Updater() {
+
+        public void updateRowLevelIndexes() {
+        }
+
+        public void insert(Cell cell) {
+        }
+
+        public void update(Cell oldCell, Cell cell) {
+        }
+
+        public void remove(Cell current) {
+        }
+    };
+
+    public Updater gcUpdaterFor(DecoratedKey key) {
+        return new GCUpdater(key);
+    }
+
+    public boolean indexes(Cell cell) {
+        return indexes(cell.name());
+    }
+
+    public void validateIndexSearchersForQuery(List<IndexExpression> clause) throws InvalidRequestException {
+        Map<String, Set<IndexExpression>> expressionsByIndexType = new HashMap<>();
+        Map<String, Set<ByteBuffer>> columnsByIndexType = new HashMap<>();
+        for (IndexExpression indexExpression : clause) {
+            SecondaryIndex index = getIndexForColumn(indexExpression.column);
+            if (index == null)
+                continue;
+            String canonicalIndexName = index.getClass().getCanonicalName();
+            Set<IndexExpression> expressions = expressionsByIndexType.get(canonicalIndexName);
+            Set<ByteBuffer> columns = columnsByIndexType.get(canonicalIndexName);
+            if (expressions == null) {
+                expressions = new HashSet<>();
+                columns = new HashSet<>();
+                expressionsByIndexType.put(canonicalIndexName, expressions);
+                columnsByIndexType.put(canonicalIndexName, columns);
+            }
+            expressions.add(indexExpression);
+            columns.add(indexExpression.column);
+        }
+        for (Map.Entry<String, Set<IndexExpression>> expressions : expressionsByIndexType.entrySet()) {
+            Set<ByteBuffer> columns = columnsByIndexType.get(expressions.getKey());
+            SecondaryIndex secondaryIndex = getIndexForColumn(columns.iterator().next());
+            SecondaryIndexSearcher searcher = secondaryIndex.createSecondaryIndexSearcher(columns);
+            for (IndexExpression expression : expressions.getValue()) {
+                searcher.validate(expression);
+            }
+        }
+    }
+
+    static boolean shouldCleanupOldValue(Cell oldCell, Cell newCell) {
+        return !oldCell.name().equals(newCell.name()) || !oldCell.value().equals(newCell.value()) || oldCell.timestamp() != newCell.timestamp();
+    }
+}

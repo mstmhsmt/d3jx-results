@@ -1,0 +1,75 @@
+package org.elasticsearch.index.query;
+
+import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.xcontent.XContentParser;
+import java.io.IOException;
+import org.elasticsearch.common.ParsingException;
+
+public class TypeQueryParser extends BaseQueryParser<TypeQueryBuilder> {
+
+    @Override
+    public String[] names() {
+        return new String[] { TypeQueryBuilder.NAME };
+    }
+
+    @Override
+    public TypeQueryBuilder fromXContent(QueryParseContext parseContext) throws IOException, ParsingException {
+        XContentParser parser = parseContext.parser();
+        BytesRef type = null;
+        String queryName = null;
+        float boost = AbstractQueryBuilder.DEFAULT_BOOST;
+        String currentFieldName = null;
+        XContentParser.Token token;
+        
+<<<<<<< commits-rmx_100/elasticsearch/elasticsearch/197313c19be74f40222bf20f742071e1b266d5d0/TypeQueryParser-05745a0.java
+
+=======
+if (token != XContentParser.Token.FIELD_NAME) {
+            throw new ParsingException(parseContext, "[type] filter should have a value field, and the type name");
+        }
+>>>>>>> commits-rmx_100/elasticsearch/elasticsearch/c8d1f7aa673e20a8806826b86b348dd34f9b4864/TypeQueryParser-cf834be.java
+
+        while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
+            if (token == XContentParser.Token.FIELD_NAME) {
+                currentFieldName = parser.currentName();
+            } else if (token.isValue()) {
+                if ("_name".equals(currentFieldName)) {
+                    queryName = parser.text();
+                } else if ("boost".equals(currentFieldName)) {
+                    boost = parser.floatValue();
+                } else if ("value".equals(currentFieldName)) {
+                    type = parser.utf8Bytes();
+                }
+            } else {
+                throw new QueryParsingException(parseContext, "[type] filter doesn't support [" + currentFieldName + "]");
+            }
+        }
+        
+<<<<<<< commits-rmx_100/elasticsearch/elasticsearch/197313c19be74f40222bf20f742071e1b266d5d0/TypeQueryParser-05745a0.java
+if (type == null) {
+            throw new QueryParsingException(parseContext, "[type] filter needs to be provided with a value for the type");
+        }
+=======
+if (!fieldName.equals("value")) {
+            throw new ParsingException(parseContext, "[type] filter should have a value field, and the type name");
+        }
+>>>>>>> commits-rmx_100/elasticsearch/elasticsearch/c8d1f7aa673e20a8806826b86b348dd34f9b4864/TypeQueryParser-cf834be.java
+
+        return new TypeQueryBuilder(type).boost(boost).queryName(queryName);
+        
+<<<<<<< commits-rmx_100/elasticsearch/elasticsearch/197313c19be74f40222bf20f742071e1b266d5d0/TypeQueryParser-05745a0.java
+
+=======
+if (token != XContentParser.Token.VALUE_STRING) {
+            throw new ParsingException(parseContext, "[type] filter should have a value field, and the type name");
+        }
+>>>>>>> commits-rmx_100/elasticsearch/elasticsearch/c8d1f7aa673e20a8806826b86b348dd34f9b4864/TypeQueryParser-cf834be.java
+
+    }
+
+    @Override
+    public TypeQueryBuilder getBuilderPrototype() {
+        return TypeQueryBuilder.PROTOTYPE;
+    }
+}

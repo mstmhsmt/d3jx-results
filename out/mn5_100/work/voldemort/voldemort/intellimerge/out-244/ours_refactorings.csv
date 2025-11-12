@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.69;735-737;voldemort.server.VoldemortConfig.getReadOnlyStorageFileHandles();884-886;voldemort.server.VoldemortConfig.getFsStorageNumLockStripes()

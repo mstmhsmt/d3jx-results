@@ -1,0 +1,154 @@
+package backtype.storm.spout;
+
+import backtype.storm.generated.ShellComponent;
+import backtype.storm.task.TopologyContext;
+import backtype.storm.utils.ShellProcess;
+import java.util.Map;
+import java.util.List;
+import java.io.IOException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import backtype.storm.multilang.SpoutMsg;
+import backtype.storm.multilang.ShellMsg;
+import backtype.storm.metric.api.rpc.IShellMetric;
+import backtype.storm.metric.api.IMetric;
+
+public class ShellSpout implements ISpout {
+
+    public static Logger LOG = LoggerFactory.getLogger(ShellSpout.class);
+
+    private SpoutOutputCollector _collector;
+
+    private String[] _command;
+
+    private ShellProcess _process;
+
+    public ShellSpout(ShellComponent component) {
+        this(component.get_execution_command(), component.get_script());
+    }
+
+    public ShellSpout(String... command) {
+        _command = command;
+    }
+
+    public void open(Map stormConf, TopologyContext context, SpoutOutputCollector collector) 
+<<<<<<< commits-hd_100/apache/storm/bc391722098c1e66f6ebe0377a3de6b51a7cf38c-67cb66fb344343dfe93f7a620d72e1ac13a59bf9/A.java
+{
+        _process = new ShellProcess(_command);
+        _collector = collector;
+        _context = context;
+        try {
+            Number subpid = _process.launch(stormConf, context);
+            LOG.info("Launched subprocess with pid " + subpid);
+        } catch (IOException e) {
+            throw new RuntimeException("Error when launching multilang subprocess\n" + _process.getErrorsString(), e);
+        }
+    }
+=======
+
+>>>>>>> commits-hd_100/apache/storm/bc391722098c1e66f6ebe0377a3de6b51a7cf38c-67cb66fb344343dfe93f7a620d72e1ac13a59bf9/B.java
+
+
+    public void close() {
+        _process.destroy();
+    }
+
+    public void nextTuple() {
+        if (_spoutMsg == null) {
+            _spoutMsg = new SpoutMsg();
+        }
+        _spoutMsg.setCommand("next");
+        _spoutMsg.setId("");
+        querySubprocess();
+    }
+
+    public void ack(Object msgId) {
+        if (_spoutMsg == null) {
+            _spoutMsg = new SpoutMsg();
+        }
+        _spoutMsg.setCommand("ack");
+        _spoutMsg.setId(msgId);
+        querySubprocess();
+    }
+
+    public void fail(Object msgId) {
+        if (_spoutMsg == null) {
+            _spoutMsg = new SpoutMsg();
+        }
+        _spoutMsg.setCommand("fail");
+        _spoutMsg.setId(msgId);
+        querySubprocess();
+    }
+
+    private void querySubprocess() {
+        try {
+            _process.writeSpoutMsg(_spoutMsg);
+            while (true) {
+                ShellMsg shellMsg = _process.readShellMsg();
+                String command = shellMsg.getCommand();
+                if (command.equals("sync")) {
+                    return;
+                } else if (command.equals("log")) {
+                    String msg = shellMsg.getMsg();
+                    LOG.info("Shell msg: " + msg);
+                } else if (command.equals("emit")) {
+                    String stream = shellMsg.getStream();
+                    Long task = shellMsg.getTask();
+                    List<Object> tuple = shellMsg.getTuple();
+                    Object messageId = shellMsg.getId();
+                    if (task == 0) {
+                        List<Integer> outtasks = _collector.emit(stream, tuple, messageId);
+                        if (shellMsg.areTaskIdsNeeded()) {
+                            _process.writeTaskIds(outtasks);
+                        }
+                    } else {
+                        _collector.emitDirect((int) task.longValue(), stream, tuple, messageId);
+                    }
+                } else {
+                    throw new RuntimeException("Unknown command received: " + command);
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void activate() {
+    }
+
+    @Override
+    public void deactivate() {
+    }
+
+    private SpoutMsg _spoutMsg;
+
+    private TopologyContext _context;
+
+    private void handleMetrics(Map action) {
+        Object nameObj = action.get("name");
+        if (nameObj == null || !(nameObj instanceof String)) {
+            throw new RuntimeException("Receive Metrics name is null or is not String");
+        }
+        String name = (String) nameObj;
+        if (name.isEmpty()) {
+            throw new RuntimeException("Receive Metrics name is empty");
+        }
+        IMetric iMetric = _context.getRegisteredMetricByName(name);
+        if (iMetric == null) {
+            throw new RuntimeException("Not find metric by name[" + name + "] ");
+        }
+        if (!(iMetric instanceof IShellMetric)) {
+            throw new RuntimeException("Metric[" + name + "] is not IShellMetric, can not call by RPC");
+        }
+        IShellMetric iShellMetric = (IShellMetric) iMetric;
+        Object paramsObj = action.get("params");
+        try {
+            iShellMetric.updateMetricFromRPC(paramsObj);
+        } catch (RuntimeException re) {
+            throw re;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+}

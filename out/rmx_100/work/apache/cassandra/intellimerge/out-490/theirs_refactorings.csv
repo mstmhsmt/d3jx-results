@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Field Signature;field;1.0;74-74;org.apache.cassandra.db.commitlog.CommitLog.compressorClass;502-502;org.apache.cassandra.db.commitlog.CommitLog.Configuration.compressorClass
+Change Field Signature;field;1.0;73-73;org.apache.cassandra.db.commitlog.CommitLog.compressor;507-507;org.apache.cassandra.db.commitlog.CommitLog.Configuration.compressor

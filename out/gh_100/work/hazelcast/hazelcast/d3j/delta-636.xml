@@ -1,0 +1,1 @@
+<xdd:delta xmlns:xdd="http://codinuum.com/diffts/delta/" xdd:reversible="false" xdd:normalized="false" xdd:lang="java" xdd:digest="MD5_c097ff0325635614d0aadba39075302b" xdd:digest_=""><xdd:change_attr xdd:path="2/0/0/1/0" xdd:attr="name" xdd:new_value="MapOperation" /><xdd:delete xdd:path="2/0/1/17" /></xdd:delta>

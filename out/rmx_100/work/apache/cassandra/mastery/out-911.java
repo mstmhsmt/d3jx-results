@@ -1,0 +1,380 @@
+package org.apache.cassandra.net;
+
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.Socket;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.utils.UUIDGen;
+import org.apache.cassandra.tracing.Tracing;
+import org.apache.cassandra.tracing.TraceState;
+import java.util.UUID;
+import java.nio.ByteBuffer;
+import java.net.InetAddress;
+import java.io.DataInputStream;
+import java.net.SocketException;
+import org.apache.cassandra.config.Config;
+import org.xerial.snappy.SnappyOutputStream;
+
+public class OutboundTcpConnection extends Thread {
+
+    private static final Logger logger = LoggerFactory.getLogger(OutboundTcpConnection.class);
+
+    private volatile boolean isStopped = false;
+
+    private static final int OPEN_RETRY_DELAY = 100;
+
+    private final OutboundTcpConnectionPool poolReference;
+
+    private DataOutputStream out;
+
+    private Socket socket;
+
+    private volatile long completed;
+
+    private final AtomicLong dropped = new AtomicLong();
+
+    public OutboundTcpConnection(OutboundTcpConnectionPool pool) {
+        super("WRITE-" + pool.endPoint());
+        this.poolReference = pool;
+    }
+
+    public void enqueue(MessageOut<?> message, String id) {
+        expireMessages();
+        try {
+            backlog.put(new QueuedMessage(message, id));
+        } catch (InterruptedException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    void closeSocket(boolean destroyThread) {
+        active.clear();
+        backlog.clear();
+        isStopped = destroyThread;
+        enqueue(CLOSE_SENTINEL, null);
+    }
+
+    void softCloseSocket() {
+        enqueue(CLOSE_SENTINEL, null);
+    }
+
+    public void run() {
+        while (true) {
+            QueuedMessage qm = active.poll();
+            if (qm == null) {
+                try {
+                    qm = backlog.take();
+                } catch (InterruptedException e) {
+                    throw new AssertionError(e);
+                }
+                BlockingQueue<QueuedMessage> tmp = backlog;
+                backlog = active;
+                active = tmp;
+            }
+            MessageOut<?> m = qm.message;
+            if (m == CLOSE_SENTINEL) {
+                disconnect();
+                if (isStopped)
+                    break;
+                continue;
+            }
+            
+<<<<<<< commits-rmx_100/apache/cassandra/a89b219090a6658bb0866f68350b82ab361a8f74/OutboundTcpConnection-b1a1fe9.java
+if (qm.timestamp < System.currentTimeMillis() - m.getTimeout())
+                dropped.incrementAndGet();
+            else if (socket != null || connect())
+                writeConnected(qm);
+            else
+                active.clear();
+=======
+if (entry.timestamp < System.currentTimeMillis() - DatabaseDescriptor.getRpcTimeout())
+                dropped.incrementAndGet();
+            else if (socket != null || connect())
+                writeConnected(entry, id);
+            else
+                active.clear();
+>>>>>>> commits-rmx_100/apache/cassandra/36f8a5d81a90430ae29ad2750982ec166b887175/OutboundTcpConnection-ae9f028.java
+
+        }
+    }
+
+    public int getPendingMessages() {
+        return active.size() + backlog.size();
+    }
+
+    public long getCompletedMesssages() {
+        return completed;
+    }
+
+    public long getDroppedMessages() {
+        return dropped.get();
+    }
+
+    private void writeConnected(
+<<<<<<< commits-rmx_100/apache/cassandra/a89b219090a6658bb0866f68350b82ab361a8f74/OutboundTcpConnection-b1a1fe9.java
+QueuedMessage
+=======
+Entry
+>>>>>>> commits-rmx_100/apache/cassandra/36f8a5d81a90430ae29ad2750982ec166b887175/OutboundTcpConnection-ae9f028.java
+ 
+<<<<<<< commits-rmx_100/apache/cassandra/a89b219090a6658bb0866f68350b82ab361a8f74/OutboundTcpConnection-b1a1fe9.java
+qm
+=======
+entry
+>>>>>>> commits-rmx_100/apache/cassandra/36f8a5d81a90430ae29ad2750982ec166b887175/OutboundTcpConnection-ae9f028.java
+) {
+        Message message = entry.message;
+        try {
+            byte[] sessionBytes = qm.message.parameters.get(Tracing.TRACE_HEADER);
+            if (sessionBytes != null) {
+                UUID sessionId = UUIDGen.getUUID(ByteBuffer.wrap(sessionBytes));
+                TraceState state = Tracing.instance().get(sessionId);
+                state.trace("Sending message to {}", poolReference.endPoint());
+                Tracing.instance().stopIfNonLocal(state);
+            }
+            write(qm.message, qm.id, qm.timestamp, out, targetVersion);
+            completed++;
+            if (active.peek() == null) {
+                out.flush();
+            }
+        } catch (Exception e) {
+            
+<<<<<<< commits-rmx_100/apache/cassandra/a89b219090a6658bb0866f68350b82ab361a8f74/OutboundTcpConnection-b1a1fe9.java
+disconnect();if (e instanceof IOException) {
+                if (logger.isDebugEnabled())
+                    logger.debug("error writing to " + poolReference.endPoint(), e);
+                if (e instanceof SocketException && qm.shouldRetry()) {
+                    try {
+                        backlog.put(new RetriedQueuedMessage(qm));
+                    } catch (InterruptedException e1) {
+                        throw new AssertionError(e1);
+                    }
+                }
+            } else {
+                logger.error("error writing to " + poolReference.endPoint(), e);
+            }
+=======
+disconnect();if (e instanceof IOException) {
+                if (logger.isDebugEnabled())
+                    logger.debug("error writing to " + poolReference.endPoint(), e);
+                if (e instanceof SocketException && entry.shouldRetry()) {
+                    try {
+                        backlog.put(new RetriedEntry(entry));
+                    } catch (InterruptedException e1) {
+                        throw new AssertionError(e1);
+                    }
+                }
+            } else {
+                logger.error("error writing to " + poolReference.endPoint(), e);
+            }
+>>>>>>> commits-rmx_100/apache/cassandra/36f8a5d81a90430ae29ad2750982ec166b887175/OutboundTcpConnection-ae9f028.java
+
+        }
+    }
+
+    static public void write(MessageOut message, String id, long timestamp, DataOutputStream out, int version) throws IOException {
+        out.writeInt(MessagingService.PROTOCOL_MAGIC);
+        if (version < MessagingService.VERSION_12) {
+            writeHeader(out, version, false);
+            out.writeInt(-1);
+        }
+        out.writeUTF(id);
+        if (version >= MessagingService.VERSION_12) {
+            out.writeInt((int) timestamp);
+        }
+        message.serialize(out, version);
+    }
+
+    private void disconnect() {
+        if (socket != null) {
+            try {
+                socket.close();
+            } catch (IOException e) {
+                if (logger.isTraceEnabled())
+                    logger.trace("exception closing connection to " + poolReference.endPoint(), e);
+            }
+            out = null;
+            socket = null;
+        }
+    }
+
+    private boolean connect() {
+        if (logger.isDebugEnabled())
+            logger.debug("attempting to connect to " + poolReference.endPoint());
+        targetVersion = MessagingService.instance().getVersion(poolReference.endPoint());
+        long start = System.currentTimeMillis();
+        while (System.currentTimeMillis() < start + DatabaseDescriptor.getRpcTimeout()) {
+            try {
+                socket = poolReference.newSocket();
+                socket.setKeepAlive(true);
+                if (isLocalDC(poolReference.endPoint())) {
+                    socket.setTcpNoDelay(true);
+                } else {
+                    socket.setTcpNoDelay(DatabaseDescriptor.getInterDCTcpNoDelay());
+                }
+                if (DatabaseDescriptor.getInternodeSendBufferSize() != null) {
+                    try {
+                        socket.setSendBufferSize(DatabaseDescriptor.getInternodeSendBufferSize().intValue());
+                    } catch (SocketException se) {
+                        logger.warn("Failed to set send buffer size on internode socket.", se);
+                    }
+                }
+                out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream(), 4096));
+                if (targetVersion >= MessagingService.VERSION_12) {
+                    out.writeInt(MessagingService.PROTOCOL_MAGIC);
+                    writeHeader(out, targetVersion, shouldCompressConnection());
+                    out.flush();
+                    DataInputStream in = new DataInputStream(socket.getInputStream());
+                    int maxTargetVersion = in.readInt();
+                    if (targetVersion > maxTargetVersion) {
+                        logger.debug("Target max version is {}; will reconnect with that version", maxTargetVersion);
+                        MessagingService.instance().setVersion(poolReference.endPoint(), maxTargetVersion);
+                        disconnect();
+                        return false;
+                    }
+                    if (targetVersion < maxTargetVersion && targetVersion < MessagingService.current_version) {
+                        logger.trace("Detected higher max version {} (using {}); will reconnect when queued messages are done", maxTargetVersion, targetVersion);
+                        MessagingService.instance().setVersion(poolReference.endPoint(), Math.min(MessagingService.current_version, maxTargetVersion));
+                        softCloseSocket();
+                    }
+                    out.writeInt(MessagingService.current_version);
+                    CompactEndpointSerializationHelper.serialize(FBUtilities.getBroadcastAddress(), out);
+                    if (shouldCompressConnection()) {
+                        out.flush();
+                        logger.trace("Upgrading OutputStream to be compressed");
+                        out = new DataOutputStream(new SnappyOutputStream(new BufferedOutputStream(socket.getOutputStream())));
+                    }
+                }
+                return true;
+            } catch (IOException e) {
+                socket = null;
+                if (logger.isTraceEnabled())
+                    logger.trace("unable to connect to " + poolReference.endPoint(), e);
+                try {
+                    Thread.sleep(OPEN_RETRY_DELAY);
+                } catch (InterruptedException e1) {
+                    throw new AssertionError(e1);
+                }
+            }
+        }
+        return false;
+    }
+
+    private void expireMessages() {
+        while (true) {
+            QueuedMessage qm = backlog.peek();
+            if (qm == null || qm.timestamp >= System.currentTimeMillis() - qm.message.getTimeout())
+                break;
+            QueuedMessage qm2 = backlog.poll();
+            if (qm2 != qm) {
+                if (qm2 != null)
+                    active.add(qm2);
+                break;
+            }
+            dropped.incrementAndGet();
+        }
+    }
+
+    
+<<<<<<< commits-rmx_100/apache/cassandra/a89b219090a6658bb0866f68350b82ab361a8f74/OutboundTcpConnection-b1a1fe9.java
+
+=======
+private static class Entry {
+
+        final Message message;
+
+        final String id;
+
+        final long timestamp;
+
+        Entry(Message message, String id) {
+            this.message = message;
+            this.id = id;
+            this.timestamp = System.currentTimeMillis();
+        }
+
+        boolean shouldRetry() {
+            return !MessagingService.DROPPABLE_VERBS.contains(message.getVerb());
+        }
+    }
+>>>>>>> commits-rmx_100/apache/cassandra/36f8a5d81a90430ae29ad2750982ec166b887175/OutboundTcpConnection-ae9f028.java
+
+
+    public int getTargetVersion() {
+        return targetVersion;
+    }
+
+    private boolean shouldCompressConnection() {
+        return DatabaseDescriptor.internodeCompression() == Config.InternodeCompression.all || (DatabaseDescriptor.internodeCompression() == Config.InternodeCompression.dc && !isLocalDC(poolReference.endPoint()));
+    }
+
+    private static final MessageOut CLOSE_SENTINEL = new MessageOut(MessagingService.Verb.INTERNAL_RESPONSE);
+
+    private static boolean isLocalDC(InetAddress targetHost) {
+        String remoteDC = DatabaseDescriptor.getEndpointSnitch().getDatacenter(targetHost);
+        String localDC = DatabaseDescriptor.getEndpointSnitch().getDatacenter(FBUtilities.getBroadcastAddress());
+        return remoteDC.equals(localDC);
+    }
+
+    private int targetVersion;
+
+    private static class RetriedQueuedMessage extends QueuedMessage {
+
+        RetriedQueuedMessage(QueuedMessage msg) {
+            super(msg.message, msg.id);
+        }
+
+        boolean shouldRetry() {
+            return false;
+        }
+    }
+
+    private static class QueuedMessage {
+
+        final MessageOut<?> message;
+
+        final String id;
+
+        final long timestamp;
+
+        QueuedMessage(MessageOut<?> message, String id) {
+            this.message = message;
+            this.id = id;
+            this.timestamp = System.currentTimeMillis();
+        }
+
+        boolean shouldRetry() {
+            return MessagingService.DROPPABLE_VERBS.contains(message.verb);
+        }
+    }
+
+    private static class RetriedEntry extends Entry {
+
+        boolean shouldRetry() {
+            return false;
+        }
+
+        RetriedEntry(Entry e) {
+            super(e.message, e.id);
+        }
+    }
+
+    private volatile BlockingQueue<QueuedMessage> active = new LinkedBlockingQueue<QueuedMessage>();
+
+    private static void writeHeader(DataOutputStream out, int version, boolean compressionEnabled) throws IOException {
+        int header = 0;
+        if (compressionEnabled)
+            header |= 4;
+        header |= (version << 8);
+        out.writeInt(header);
+    }
+
+    private volatile BlockingQueue<QueuedMessage> backlog = new LinkedBlockingQueue<QueuedMessage>();
+}

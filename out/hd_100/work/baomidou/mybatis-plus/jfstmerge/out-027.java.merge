@@ -1,0 +1,416 @@
+package com.baomidou.mybatisplus.toolkit;
+
+/**
+ * <p>
+<<<<<<< MINE
+ * EscapeOfString ，数据库字符串转义
+||||||| BASE
+ * use this file except in compliance with the License. You may obtain a copy of
+=======
+ * StringEscape ，数据库字符串转义
+>>>>>>> YOURS
+ * </p>
+ *
+ * @author Caratacus
+ * @Date 2016-10-16
+ */
+public class StringEscape {
+	/**
+	 * 字符串是否需要转义
+<<<<<<< MINE
+	 * 
+	 * @param x
+	 * @param stringLength
+	 * @return
+	 */
+	private static boolean isEscapeNeededForString(String x, int stringLength) {
+
+		boolean needsHexEscape = false;
+
+		for (int i = 0; i < stringLength; ++i) {
+			char c = x.charAt(i);
+
+			switch (c) {
+			case '\\':
+				needsHexEscape = true;
+
+				break;
+
+			case '\'':
+				needsHexEscape = true;
+
+				break;
+
+			case '"': /* Better safe than sorry */
+				needsHexEscape = true;
+
+				break;
+
+			}
+
+			if (needsHexEscape) {
+				break; // no need to scan more
+			}
+		}
+		return needsHexEscape;
+	}
+
+	/**
+	 * 转义字符串
+	 * 
+	 * @param x
+||||||| BASE
+ * the License.
+ */
+package com.baomidou.mybatisplus.mapper;
+
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Logger;
+
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.apache.ibatis.executor.keygen.Jdbc3KeyGenerator;
+import org.apache.ibatis.executor.keygen.KeyGenerator;
+import org.apache.ibatis.executor.keygen.NoKeyGenerator;
+import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.mapping.SqlCommandType;
+import org.apache.ibatis.mapping.SqlSource;
+import org.apache.ibatis.mapping.StatementType;
+import org.apache.ibatis.scripting.LanguageDriver;
+import org.apache.ibatis.scripting.defaults.RawSqlSource;
+import org.apache.ibatis.session.Configuration;
+
+import com.baomidou.mybatisplus.MybatisConfiguration;
+import com.baomidou.mybatisplus.annotations.FieldStrategy;
+import com.baomidou.mybatisplus.annotations.IdType;
+import com.baomidou.mybatisplus.toolkit.TableFieldInfo;
+import com.baomidou.mybatisplus.toolkit.TableInfo;
+import com.baomidou.mybatisplus.toolkit.TableInfoHelper;
+
+/**
+ * <p>
+ * SQL 自动注入器
+ * </p>
+ * 
+ * @author hubin sjy
+ * @Date 2016-09-09
+ */
+public class AutoSqlInjector implements ISqlInjector {
+	protected static final Logger logger = Logger.getLogger("AutoSqlInjector");
+
+=======
+	 *
+	 * @param x
+	 * @param stringLength
+>>>>>>> YOURS
+	 * @return
+	 */
+<<<<<<< MINE
+	public static String escapeString(String x) {
+||||||| BASE
+import java.lang.reflect.Type;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Logger;
+
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.apache.ibatis.executor.keygen.Jdbc3KeyGenerator;
+import org.apache.ibatis.executor.keygen.KeyGenerator;
+import org.apache.ibatis.executor.keygen.NoKeyGenerator;
+import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.mapping.SqlCommandType;
+import org.apache.ibatis.mapping.SqlSource;
+import org.apache.ibatis.mapping.StatementType;
+import org.apache.ibatis.scripting.LanguageDriver;
+import org.apache.ibatis.scripting.defaults.RawSqlSource;
+import org.apache.ibatis.session.Configuration;
+
+import com.baomidou.mybatisplus.MybatisConfiguration;
+import com.baomidou.mybatisplus.annotations.FieldStrategy;
+import com.baomidou.mybatisplus.annotations.IdType;
+import com.baomidou.mybatisplus.toolkit.TableFieldInfo;
+import com.baomidou.mybatisplus.toolkit.TableInfo;
+import com.baomidou.mybatisplus.toolkit.TableInfoHelper;
+
+/**
+ * <p>
+ * SQL 自动注入器
+ * </p>
+ * 
+ * @author hubin sjy
+ * @Date 2016-09-09
+ */
+public class AutoSqlInjector implements ISqlInjector {
+	protected static final Logger logger = Logger.getLogger("AutoSqlInjector");
+
+	protected Configuration configuration;
+
+	protected LanguageDriver languageDriver;
+
+	protected MapperBuilderAssistant builderAssistant;
+
+	protected DBType dbType = DBType.MYSQL;
+
+	/**
+	 * CRUD注入后给予标识 注入过后不再注入
+	 *
+	 * @param configuration
+=======
+	private static boolean isEscapeNeededForString(String x, int stringLength) {
+
+		boolean needsHexEscape = false;
+
+		for (int i = 0; i < stringLength; ++i) {
+			char c = x.charAt(i);
+
+			switch (c) {
+				case 0: /* Must be escaped for 'mysql' */
+
+					needsHexEscape = true;
+					break;
+
+				case '\n': /* Must be escaped for logs */
+					needsHexEscape = true;
+
+					break;
+
+				case '\r':
+					needsHexEscape = true;
+					break;
+
+				case '\\':
+					needsHexEscape = true;
+
+					break;
+
+				case '\'':
+					needsHexEscape = true;
+
+					break;
+
+				case '"': /* Better safe than sorry */
+					needsHexEscape = true;
+
+					break;
+
+				case '\032': /* This gives problems on Win32 */
+					needsHexEscape = true;
+					break;
+			}
+
+			if (needsHexEscape) {
+				break; // no need to scan more
+			}
+		}
+		return needsHexEscape;
+	}
+>>>>>>> YOURS
+
+<<<<<<< MINE
+		if (x.matches("\'(.+)\'")) {
+			x = x.substring(1, x.length() - 1);
+		}
+
+		String parameterAsString = x;
+		int stringLength = x.length();
+		if (isEscapeNeededForString(x, stringLength)) {
+
+			StringBuilder buf = new StringBuilder((int) (x.length() * 1.1));
+
+			//
+			// Note: buf.append(char) is _faster_ than appending in blocks,
+			// because the block append requires a System.arraycopy().... go
+			// figure...
+			//
+
+			for (int i = 0; i < stringLength; ++i) {
+				char c = x.charAt(i);
+
+				switch (c) {
+
+				case '\\':
+					buf.append('\\');
+					buf.append('\\');
+
+					break;
+
+				case '\'':
+					buf.append('\\');
+					buf.append('\'');
+					break;
+
+				case '"': /* Better safe than sorry */
+					buf.append('\\');
+					buf.append('"');
+					break;
+
+				default:
+					buf.append(c);
+||||||| BASE
+	protected MapperBuilderAssistant builderAssistant;
+
+	protected DBType dbType = DBType.MYSQL;
+
+	/**
+	 * CRUD注入后给予标识 注入过后不再注入
+	 *
+	 * @param configuration
+	 * @param builderAssistant
+	 * @param mapperClass
+	 */
+	public void inspectInject(Configuration configuration, MapperBuilderAssistant builderAssistant, Class<?> mapperClass) {
+		String className = mapperClass.toString();
+		Set<String> mapperRegistryCache = MybatisConfiguration.MAPPER_REGISTRY_CACHE;
+		if (!mapperRegistryCache.contains(className)) {
+			inject(configuration, builderAssistant, mapperClass);
+			mapperRegistryCache.add(className);
+		}
+	}
+
+	/**
+	 * 注入单点 crudSql
+	 */
+	public void inject(Configuration configuration, MapperBuilderAssistant builderAssistant, Class<?> mapperClass) {
+		this.configuration = configuration;
+		this.builderAssistant = builderAssistant;
+		this.languageDriver = configuration.getDefaultScriptingLanuageInstance();
+		this.dbType = MybatisConfiguration.DB_TYPE;
+		if (configuration.isMapUnderscoreToCamelCase()) {
+			/* 开启驼峰配置 */
+			MybatisConfiguration.DB_COLUMN_UNDERLINE = true;
+		}
+		Class<?> modelClass = extractModelClass(mapperClass);
+		TableInfo table = TableInfoHelper.initTableInfo(modelClass);
+
+		/**
+		 * 没有指定主键，默认方法不能使用
+		 */
+		if (null != table && null != table.getKeyProperty()) {
+			/* 插入 */
+			this.injectInsertOneSql(false, mapperClass, modelClass, table);
+			this.injectInsertOneSql(true, mapperClass, modelClass, table);
+			this.injectInsertBatchSql(mapperClass, modelClass, table);
+
+			/* 删除 */
+			this.injectDeleteSelectiveSql(mapperClass, modelClass, table);
+			this.injectDeleteByMapSql(mapperClass, table);
+			this.injectDeleteSql(false, mapperClass, modelClass, table);
+			this.injectDeleteSql(true, mapperClass, modelClass, table);
+
+			/* 修改 */
+			this.injectUpdateByIdSql(false, mapperClass, modelClass, table);
+			this.injectUpdateByIdSql(true, mapperClass, modelClass, table);
+			this.injectUpdateSql(false, mapperClass, modelClass, table);
+			this.injectUpdateSql(true, mapperClass, modelClass, table);
+			this.injectUpdateBatchById(mapperClass, modelClass, table);
+
+			/* 查询 */
+			this.injectSelectSql(false, mapperClass, modelClass, table);
+			this.injectSelectSql(true, mapperClass, modelClass, table);
+			this.injectSelectByMapSql(mapperClass, modelClass, table);
+			this.injectSelectOneSql(mapperClass, modelClass, table);
+			this.injectSelectCountSql(mapperClass, modelClass, table);
+			this.injectSelectCountByEWSql(SqlMethod.SELECT_COUNT_EW, mapperClass, modelClass, table);
+			this.injectSelectListSql(SqlMethod.SELECT_LIST, mapperClass, modelClass, table);
+			this.injectSelectListSql(SqlMethod.SELECT_PAGE, mapperClass, modelClass, table);
+
+			/* 自定义方法 */
+			this.inject(configuration, builderAssistant, mapperClass, modelClass, table);
+		} else {
+			/**
+			 * 警告
+			 */
+			logger.warning(String.format("%s ,Not found @TableId annotation, cannot use mybatis-plus curd method.",
+					modelClass.toString()));
+		}
+	}
+
+	/**
+	 * 自定义方法，注入点（子类需重写该方法）
+	 */
+=======
+	/**
+	 * 转义字符串
+	 *
+	 * @param x
+	 * @return
+	 */
+	public static String escapeString(String x) {
+
+		if (x.matches("\'(.+)\'")) {
+			x = x.substring(1, x.length() - 1);
+		}
+
+		String parameterAsString = x;
+		int stringLength = x.length();
+		if (isEscapeNeededForString(x, stringLength)) {
+
+			StringBuilder buf = new StringBuilder((int) (x.length() * 1.1));
+
+			//
+			// Note: buf.append(char) is _faster_ than appending in blocks,
+			// because the block append requires a System.arraycopy().... go
+			// figure...
+			//
+
+			for (int i = 0; i < stringLength; ++i) {
+				char c = x.charAt(i);
+
+				switch (c) {
+					case 0: /* Must be escaped for 'mysql' */
+						buf.append('\\');
+						buf.append('0');
+
+						break;
+
+					case '\n': /* Must be escaped for logs */
+						buf.append('\\');
+						buf.append('n');
+
+						break;
+
+					case '\r':
+						buf.append('\\');
+						buf.append('r');
+
+						break;
+
+					case '\\':
+						buf.append('\\');
+						buf.append('\\');
+
+						break;
+
+					case '\'':
+						buf.append('\\');
+						buf.append('\'');
+
+						break;
+
+					case '"': /* Better safe than sorry */
+						buf.append('\\');
+						buf.append('"');
+
+						break;
+
+					case '\032': /* This gives problems on Win32 */
+						buf.append('\\');
+						buf.append('Z');
+
+						break;
+
+					default:
+						buf.append(c);
+>>>>>>> YOURS
+				}
+			}
+
+			parameterAsString = buf.toString();
+		}
+		return "\'" + parameterAsString + "\'";
+	}
+}

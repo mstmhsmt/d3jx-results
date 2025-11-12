@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Constructor Signature;constructor;0.79;140-156;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.UTF8StreamJsonParser(IOContext, int, InputStream, ObjectCodec, ByteQuadsCanonicalizer, byte[], int, int, boolean);132-149;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.UTF8StreamJsonParser(ObjectReadContext, IOContext, int, int, InputStream, ByteQuadsCanonicalizer, byte[], int, int, int, boolean)

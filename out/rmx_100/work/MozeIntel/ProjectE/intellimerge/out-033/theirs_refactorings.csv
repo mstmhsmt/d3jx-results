@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.79;22-33;moze_intel.projecte.network.packets.UpdateGemModePKT.onMessage(UpdateGemModePKT, MessageContext);35-46;moze_intel.projecte.network.packets.UpdateGemModePKT.Handler.onMessage(UpdateGemModePKT, MessageContext)

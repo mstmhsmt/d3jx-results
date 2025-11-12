@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Constructor Signature;constructor;0.91;157-180;org.opencastproject.userdirectory.moodle.MoodleUserProviderInstance.MoodleUserProviderInstance(String, MoodleWebService, Organization, String, String, String, boolean, int, int);163-195;org.opencastproject.userdirectory.moodle.MoodleUserProviderInstance.MoodleUserProviderInstance(String, MoodleWebService, Organization, String, String, String, boolean, int, int, String)

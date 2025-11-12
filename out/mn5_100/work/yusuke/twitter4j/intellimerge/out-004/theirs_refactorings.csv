@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.61;170-179;twitter4j.TwitterStream.getLinksStream(int);181-190;twitter4j.TwitterStream.getCountStream(String, int)
+Extract Method;method;0.61;133-142;twitter4j.TwitterStream.getFirehoseStream(int);181-190;twitter4j.TwitterStream.getCountStream(String, int)

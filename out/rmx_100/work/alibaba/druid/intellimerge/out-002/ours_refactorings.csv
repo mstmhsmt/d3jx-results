@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.66;690-715;com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser.parseShowWarnings();1394-1416;com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser.parseLimit()
+Extract Method;method;0.66;107-132;com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser.parseUpdateStatement();1394-1416;com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser.parseLimit()

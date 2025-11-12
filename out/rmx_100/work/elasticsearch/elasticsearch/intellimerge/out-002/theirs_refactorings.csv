@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.6;161-261;org.elasticsearch.repositories.s3.S3BlobStoreContainerTests.testExecuteMultipartUpload();173-318;org.elasticsearch.repositories.s3.S3BlobStoreContainerTests.testExecuteMultipart(boolean)

@@ -1,0 +1,71 @@
+package de.metas.workflow;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
+import de.metas.util.lang.ReferenceListAwareEnum;
+import de.metas.util.lang.ReferenceListAwareEnums;
+import de.metas.util.time.DurationUtils;
+import lombok.Getter;
+import lombok.NonNull;
+import org.adempiere.exceptions.AdempiereException;
+import org.compiere.model.X_AD_Workflow;
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalUnit;
+import java.util.Arrays;
+
+public enum WFDurationUnit implements ReferenceListAwareEnum {
+  Year(X_AD_Workflow.DURATIONUNIT_Year, Duration.ofDays(365), ChronoUnit.YEARS),
+  Month(X_AD_Workflow.DURATIONUNIT_Month, Duration.ofDays(30), ChronoUnit.MONTHS),
+  Day(X_AD_Workflow.DURATIONUNIT_Day, Duration.ofDays(1), ChronoUnit.DAYS),
+  Hour(X_AD_Workflow.DURATIONUNIT_Hour, Duration.ofHours(1), ChronoUnit.HOURS),
+  Minute(X_AD_Workflow.DURATIONUNIT_Minute, Duration.ofMinutes(1), ChronoUnit.MINUTES),
+  Second(X_AD_Workflow.DURATIONUNIT_Second, Duration.ofSeconds(1), ChronoUnit.SECONDS)
+  ;
+
+  private static final ReferenceListAwareEnums.ValuesIndex<WFDurationUnit> typesByCode = ReferenceListAwareEnums.index(values());
+
+  private static final ImmutableMap<TemporalUnit, WFDurationUnit> typesByTemporalUnit = Maps.uniqueIndex(Arrays.asList(values()), WFDurationUnit::getTemporalUnit);
+
+  @Getter @NonNull private final String code;
+
+  @Getter @NonNull private final Duration duration;
+
+  @Getter @NonNull private final TemporalUnit temporalUnit;
+
+  WFDurationUnit(@NonNull final String code, @NonNull final Duration duration, @NonNull final TemporalUnit temporalUnit) {
+    this.code = code;
+    this.duration = duration;
+    this.temporalUnit = temporalUnit;
+  }
+
+  public static WFDurationUnit ofCode(@NonNull final String code) {
+    return typesByCode.ofCode(code);
+  }
+
+  @SuppressWarnings(value = { "unused" }) public static WFDurationUnit ofTemporalUnit(@NonNull final TemporalUnit temporalUnit) {
+    final WFDurationUnit type = typesByTemporalUnit.get(temporalUnit);
+    if (type == null) {
+      throw new AdempiereException("No " + WFDurationUnit.class.getSimpleName() + " found for temporal unit: " + temporalUnit);
+    }
+    return type;
+  }
+
+  public BigDecimal toBigDecimal(@NonNull final Duration duration) {
+    return DurationUtils.toBigDecimal(duration, getTemporalUnit());
+  }
+
+  public int toInt(@NonNull final Duration duration) {
+    return DurationUtils.toInt(duration, getTemporalUnit());
+  }
+
+  public Duration toDuration(@NonNull final BigDecimal durationBD) {
+    return DurationUtils.
+<<<<<<< commits-gh_100/metasfresh/metasfresh/3169eb053bded956ac88277a2b002e859ca238dc/WFDurationUnit-6351049.java
+    toWorkDurationRoundUp(durationBD, getTemporalUnit())
+=======
+    toWorkDuration(durationBD, getTemporalUnit())
+>>>>>>> commits-gh_100/metasfresh/metasfresh/4ac320e7487f8b93a5b376b3eae1cce57611ea2e/WFDurationUnit-6eb41f7.java
+    ;
+  }
+}

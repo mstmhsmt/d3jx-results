@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Constructor Signature;constructor;0.98;179-209;org.elasticsearch.cluster.metadata.MetaData.MetaData(String, long, Settings, Settings, ImmutableOpenMap, ImmutableOpenMap, ImmutableOpenMap, String[], String[], String[], SortedMap);183-215;org.elasticsearch.cluster.metadata.MetaData.MetaData(String, long, CoordinationMetaData, Settings, Settings, ImmutableOpenMap, ImmutableOpenMap, ImmutableOpenMap, String[], String[], String[], SortedMap)

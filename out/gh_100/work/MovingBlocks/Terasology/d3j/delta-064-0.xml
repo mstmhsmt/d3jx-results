@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="UTF-8"?><xdd:delta xmlns:xdd="http://codinuum.com/diffts/delta/" xdd:reversible="false" xdd:normalized="false" xdd:lang="java" xdd:digest="MD5_6d6ab0e442c0770f1b2f80b914dce7cf" xdd:digest_="MD5_688ad4e5fbbd859d3de4d7f8bbd0cfc7"><xdd:change_attr xdd:path="1/5" xdd:attr="name" xdd:new_value="org.terasology.gestalt.assets.ResourceUrn"/></xdd:delta>

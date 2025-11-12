@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.82;183-186;redis.clients.jedis.BinaryShardedJedis.rpush(byte[], byte[]);184-187;redis.clients.jedis.BinaryShardedJedis.rpush(byte[], byte[][])
+Change Method Signature;method;0.82;188-191;redis.clients.jedis.BinaryShardedJedis.lpush(byte[], byte[]);189-192;redis.clients.jedis.BinaryShardedJedis.lpush(byte[], byte[][])

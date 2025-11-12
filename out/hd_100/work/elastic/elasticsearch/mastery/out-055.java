@@ -1,0 +1,133 @@
+package org.elasticsearch.index.query;
+
+import org.elasticsearch.common.xcontent.XContentBuilder;
+import java.io.IOException;
+import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.index.Term;
+
+public class CommonTermsQueryBuilder extends BaseQueryBuilder implements BoostableQueryBuilder<CommonTermsQueryBuilder> {
+
+    public static enum Operator {
+
+        OR, AND
+    }
+
+    private final String name;
+
+    private final Object text;
+
+    private Operator highFreqOperator = null;
+
+    private Operator lowFreqOperator = null;
+
+    private String analyzer = null;
+
+    private Float boost = null;
+
+    private String lowFreqMinimumShouldMatch = null;
+
+    private String highFreqMinimumShouldMatch = null;
+
+    private Boolean disableCoords = null;
+
+    private Float cutoffFrequency = null;
+
+    private String queryName;
+
+    public CommonTermsQueryBuilder(String name, Object text) {
+        if (name == null) {
+            throw new IllegalArgumentException("Field name must not be null");
+        }
+        if (text == null) {
+            throw new IllegalArgumentException("Query must not be null");
+        }
+        this.text = text;
+        this.name = name;
+    }
+
+    public CommonTermsQueryBuilder highFreqOperator(Operator operator) {
+        this.highFreqOperator = operator;
+        return this;
+    }
+
+    public CommonTermsQueryBuilder lowFreqOperator(Operator operator) {
+        this.lowFreqOperator = operator;
+        return this;
+    }
+
+    public CommonTermsQueryBuilder analyzer(String analyzer) {
+        this.analyzer = analyzer;
+        return this;
+    }
+
+    @Override
+    public CommonTermsQueryBuilder boost(float boost) {
+        this.boost = boost;
+        return this;
+    }
+
+    public CommonTermsQueryBuilder cutoffFrequency(float cutoffFrequency) {
+        this.cutoffFrequency = cutoffFrequency;
+        return this;
+    }
+
+    public CommonTermsQueryBuilder highFreqMinimumShouldMatch(String highFreqMinimumShouldMatch) {
+        this.highFreqMinimumShouldMatch = highFreqMinimumShouldMatch;
+        return this;
+    }
+
+    public CommonTermsQueryBuilder lowFreqMinimumShouldMatch(String lowFreqMinimumShouldMatch) {
+        this.lowFreqMinimumShouldMatch = lowFreqMinimumShouldMatch;
+        return this;
+    }
+
+    public CommonTermsQueryBuilder queryName(String queryName) {
+        this.queryName = queryName;
+        return this;
+    }
+
+    @Override
+    public void doXContent(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject(CommonTermsQueryParser.NAME);
+        builder.startObject(name);
+        builder.field("query", text);
+        if (disableCoords != null) {
+            builder.field("disable_coords", disableCoords);
+        }
+        if (highFreqOperator != null) {
+            builder.field("high_freq_operator", highFreqOperator.toString());
+        }
+        if (lowFreqOperator != null) {
+            builder.field("low_freq_operator", lowFreqOperator.toString());
+        }
+        if (analyzer != null) {
+            builder.field("analyzer", analyzer);
+        }
+        if (boost != null) {
+            builder.field("boost", boost);
+        }
+        if (cutoffFrequency != null) {
+            builder.field("cutoff_frequency", cutoffFrequency);
+        }
+        if (lowFreqMinimumShouldMatch != null || highFreqMinimumShouldMatch != null) {
+            builder.startObject("minimum_should_match");
+            if (lowFreqMinimumShouldMatch != null) {
+                builder.field("low_freq", lowFreqMinimumShouldMatch);
+            }
+            if (highFreqMinimumShouldMatch != null) {
+                builder.field("high_freq", highFreqMinimumShouldMatch);
+            }
+            builder.endObject();
+        }
+        if (queryName != null) {
+            builder.field("_name", queryName);
+        }
+        builder.endObject();
+        builder.endObject();
+    }
+
+    final protected String parserName() {
+        return CommonTermsQueryParser.NAME;
+    }
+}

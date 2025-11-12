@@ -1,0 +1,1 @@
+<xdd:delta xmlns:xdd="http://codinuum.com/diffts/delta/" xdd:reversible="false" xdd:normalized="false" xdd:lang="java" xdd:digest="MD5_a2fdfd5650c5d12bf28ddacc58cd51d7" xdd:digest_=""><xdd:change_attr xdd:path="2/0/1/17/3/0/0" xdd:attr="ident" xdd:new_value="toWorkDurationRoundUp" xdd:mctl="F" /><xdd:delete xdd:path="1/9" /></xdd:delta>

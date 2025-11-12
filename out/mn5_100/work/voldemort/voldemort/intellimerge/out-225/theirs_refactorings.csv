@@ -1,0 +1,4 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.66;227-238;voldemort.store.rebalancing.RedirectingStore.proxyGetAndLocalPut(ByteArray);290-299;voldemort.store.rebalancing.RedirectingStore.proxyGetAndLocalPut(ByteArray, int)
+Inline Method;method;0.77;96-105;voldemort.store.rebalancing.RedirectingStore.redirectingKey(ByteArray);149-156;voldemort.store.rebalancing.RedirectingStore.checkKeyBelongsToStolenPartitions(ByteArray)
+Extract Method;method;0.58;118-130;voldemort.store.rebalancing.RedirectingStore.getAll(Iterable);308-320;voldemort.store.rebalancing.RedirectingStore.proxyGetAllAndLocalPut(List, List)

@@ -1,0 +1,10 @@
+package org.antlr.v4.runtime;
+
+public interface ParseListener<Symbol extends Token> {
+
+    <T extends Symbol> void visitTerminal(ParserRuleContext<T> parent, T token);
+
+    void enterNonLRRule(ParserRuleContext<? extends Symbol> ctx);
+
+    void exitEveryRule(ParserRuleContext<? extends Symbol> ctx);
+}

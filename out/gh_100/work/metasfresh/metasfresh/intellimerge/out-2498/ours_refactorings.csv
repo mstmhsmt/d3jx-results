@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Constructor Signature;constructor;0.93;74-94;de.metas.handlingunits.picking.job.model.PickingJob.PickingJob(PickingJobId, PickingJobHeader, Optional, ImmutableList, ImmutableSet, PickingJobDocStatus);79-103;de.metas.handlingunits.picking.job.model.PickingJob.PickingJob(PickingJobId, PickingJobHeader, Optional, ImmutableList, ImmutableSet, PickingJobDocStatus, boolean, boolean)

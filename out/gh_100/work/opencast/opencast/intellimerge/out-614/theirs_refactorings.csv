@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.98;99-101;org.opencastproject.distribution.streaming.endpoint.StreamingDistributionRestService.setService(DistributionService);104-106;org.opencastproject.distribution.streaming.endpoint.StreamingDistributionRestService.setService(StreamingDistributionService)

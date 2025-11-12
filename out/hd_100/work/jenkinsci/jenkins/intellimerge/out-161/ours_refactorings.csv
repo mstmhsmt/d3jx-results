@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.46;178-180;jenkins.security.ApiTokenProperty.DescriptorImpl.newInstance(User);393-399;jenkins.security.ApiTokenProperty.DescriptorImpl.forceNewInstance(User, boolean)
+Change Field Signature;field;0.97;72-73;jenkins.security.ApiTokenProperty.SHOW_TOKEN_TO_ADMINS;92-94;jenkins.security.ApiTokenProperty.SHOW_LEGACY_TOKEN_TO_ADMINS

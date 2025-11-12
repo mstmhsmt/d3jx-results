@@ -1,0 +1,1463 @@
+package hudson;
+
+import hudson.cli.CLICommand;
+import hudson.console.ConsoleAnnotationDescriptor;
+import hudson.console.ConsoleAnnotatorFactory;
+import hudson.init.InitMilestone;
+import hudson.model.AbstractProject;
+import hudson.model.Action;
+import hudson.model.Describable;
+import hudson.model.Descriptor;
+import hudson.model.DescriptorVisibilityFilter;
+import hudson.model.Hudson;
+import hudson.model.Item;
+import hudson.model.ItemGroup;
+import hudson.model.Items;
+import hudson.model.JDK;
+import hudson.model.Job;
+import hudson.model.JobPropertyDescriptor;
+import hudson.model.ModelObject;
+import hudson.model.Node;
+import hudson.model.PageDecorator;
+import hudson.model.PaneStatusProperties;
+import hudson.model.ParameterDefinition;
+import hudson.model.ParameterDefinition.ParameterDescriptor;
+import hudson.model.Run;
+import hudson.model.TopLevelItem;
+import hudson.model.User;
+import hudson.model.View;
+import hudson.scm.SCM;
+import hudson.scm.SCMDescriptor;
+import hudson.search.SearchableModelObject;
+import hudson.security.AccessControlled;
+import hudson.security.AuthorizationStrategy;
+import hudson.security.GlobalSecurityConfiguration;
+import hudson.security.Permission;
+import hudson.security.SecurityRealm;
+import hudson.security.captcha.CaptchaSupport;
+import hudson.security.csrf.CrumbIssuer;
+import hudson.slaves.Cloud;
+import hudson.slaves.ComputerLauncher;
+import hudson.slaves.NodeProperty;
+import hudson.slaves.NodePropertyDescriptor;
+import hudson.slaves.RetentionStrategy;
+import hudson.tasks.BuildStepDescriptor;
+import hudson.tasks.BuildWrapper;
+import hudson.tasks.BuildWrappers;
+import hudson.tasks.Builder;
+import hudson.tasks.Publisher;
+import hudson.tasks.UserAvatarResolver;
+import hudson.util.Area;
+import hudson.util.FormValidation.CheckMethod;
+import hudson.util.Iterators;
+import hudson.util.jna.GNUCLibrary;
+import hudson.util.Secret;
+import hudson.views.MyViewsTabBar;
+import hudson.views.ViewsTabBar;
+import hudson.widgets.RenderOnDemandClosure;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
+import java.lang.management.LockInfo;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MonitorInfo;
+import java.lang.management.ThreadInfo;
+import java.lang.management.ThreadMXBean;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.URLDecoder;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.ConcurrentModificationException;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.logging.Level;
+import java.util.logging.LogManager;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
+import java.util.regex.Pattern;
+import javax.servlet.ServletException;
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import jenkins.model.GlobalConfiguration;
+import jenkins.model.GlobalConfigurationCategory;
+import jenkins.model.Jenkins;
+import jenkins.model.ModelObjectWithChildren;
+import jenkins.model.ModelObjectWithContextMenu;
+import org.acegisecurity.providers.anonymous.AnonymousAuthenticationToken;
+import org.apache.commons.jelly.JellyContext;
+import org.apache.commons.jelly.JellyTagException;
+import org.apache.commons.jelly.Script;
+import org.apache.commons.jelly.XMLOutput;
+import org.apache.commons.jexl.parser.ASTSizeFunction;
+import org.apache.commons.jexl.util.Introspector;
+import org.apache.commons.lang.StringUtils;
+import org.jenkins.ui.icon.IconSet;
+import org.jvnet.tiger_types.Types;
+import org.kohsuke.stapler.Ancestor;
+import org.kohsuke.stapler.Stapler;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.jelly.InternationalizedStringExpression.RawHtmlArgument;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
+import hudson.util.RunList;
+import java.util.concurrent.atomic.AtomicLong;
+import javax.annotation.CheckForNull;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
+import hudson.util.HudsonIsRestarting;
+import hudson.util.HudsonIsLoading;
+
+@SuppressWarnings("rawtypes")
+public class Functions {
+
+    private static final AtomicLong iota = new AtomicLong();
+
+    public Functions() {
+    }
+
+    public String generateId() {
+        return "id" + iota.getAndIncrement();
+    }
+
+    static public boolean isModel(Object o) {
+        return o instanceof ModelObject;
+    }
+
+    static public boolean isModelWithContextMenu(Object o) {
+        return o instanceof ModelObjectWithContextMenu;
+    }
+
+    static public boolean isModelWithChildren(Object o) {
+        return o instanceof ModelObjectWithChildren;
+    }
+
+    @Deprecated
+    static public boolean isMatrixProject(Object o) {
+        return o != null && o.getClass().getName().equals("hudson.matrix.MatrixProject");
+    }
+
+    static public String xsDate(Calendar cal) {
+        return Util.XS_DATETIME_FORMATTER.format(cal.getTime());
+    }
+
+    static public String rfc822Date(Calendar cal) {
+        return Util.RFC822_DATETIME_FORMATTER.format(cal.getTime());
+    }
+
+    static public boolean isExtensionsAvailable() {
+        final Jenkins jenkins = Jenkins.getInstanceOrNull();
+        return jenkins != null && jenkins.getInitLevel().compareTo(InitMilestone.EXTENSIONS_AUGMENTED) >= 0 && !jenkins.isTerminating();
+    }
+
+    static public void initPageVariables(JellyContext context) {
+        StaplerRequest currentRequest = Stapler.getCurrentRequest();
+        String rootURL = currentRequest.getContextPath();
+        Functions h = new Functions();
+        context.setVariable("h", h);
+        context.setVariable("rootURL", rootURL);
+        context.setVariable("resURL", rootURL + getResourcePath());
+        context.setVariable("imagesURL", rootURL + getResourcePath() + "/images");
+        context.setVariable("userAgent", currentRequest.getHeader("User-Agent"));
+        IconSet.initPageVariables(context);
+    }
+
+    static public <B> Class getTypeParameter(Class<? extends B> c, Class<B> base, int n) {
+        Type parameterization = Types.getBaseClass(c, base);
+        if (parameterization instanceof ParameterizedType) {
+            ParameterizedType pt = (ParameterizedType) parameterization;
+            return Types.erasure(Types.getTypeArgument(pt, n));
+        } else {
+            throw new AssertionError(c + " doesn't properly parameterize " + base);
+        }
+    }
+
+    public JDK.DescriptorImpl getJDKDescriptor() {
+        return Jenkins.getInstance().getDescriptorByType(JDK.DescriptorImpl.class);
+    }
+
+    static public String getDiffString(int i) {
+        if (i == 0)
+            return "±0";
+        String s = Integer.toString(i);
+        if (i > 0)
+            return "+" + s;
+        else
+            return s;
+    }
+
+    static public String getDiffString2(int i) {
+        if (i == 0)
+            return "";
+        String s = Integer.toString(i);
+        if (i > 0)
+            return "+" + s;
+        else
+            return s;
+    }
+
+    static public String getDiffString2(String prefix, int i, String suffix) {
+        if (i == 0)
+            return "";
+        String s = Integer.toString(i);
+        if (i > 0)
+            return prefix + "+" + s + suffix;
+        else
+            return prefix + s + suffix;
+    }
+
+    static public String addSuffix(int n, String singular, String plural) {
+        StringBuilder buf = new StringBuilder();
+        buf.append(n).append(' ');
+        if (n == 1)
+            buf.append(singular);
+        else
+            buf.append(plural);
+        return buf.toString();
+    }
+
+    static public RunUrl decompose(StaplerRequest req) {
+        List<Ancestor> ancestors = req.getAncestors();
+        Ancestor f = null, l = null;
+        for (Ancestor anc : ancestors) {
+            if (anc.getObject() instanceof Run) {
+                if (f == null)
+                    f = anc;
+                l = anc;
+            }
+        }
+        if (l == null)
+            return null;
+        String head = f.getPrev().getUrl() + '/';
+        String base = l.getUrl();
+        String reqUri = req.getOriginalRequestURI();
+        String furl = f.getUrl();
+        int slashCount = 0;
+        for (int i = furl.indexOf('/'); i >= 0; i = furl.indexOf('/', i + 1)) slashCount++;
+        String rest = reqUri.replaceFirst("(?:/+[^/]*){" + slashCount + "}", "");
+        return new RunUrl((Run) f.getObject(), head, base, rest);
+    }
+
+    static public Area getScreenResolution() {
+        Cookie res = Functions.getCookie(Stapler.getCurrentRequest(), "screenResolution");
+        if (res != null)
+            return Area.parse(res.getValue());
+        return null;
+    }
+
+    static final public class RunUrl {
+
+        private final String head, base, rest;
+
+        private final Run run;
+
+        public RunUrl(Run run, String head, String base, String rest) {
+            this.run = run;
+            this.head = head;
+            this.base = base;
+            this.rest = rest;
+        }
+
+        public String getBaseUrl() {
+            return base;
+        }
+
+        public String getNextBuildUrl() {
+            return getUrl(run.getNextBuild());
+        }
+
+        public String getPreviousBuildUrl() {
+            return getUrl(run.getPreviousBuild());
+        }
+
+        private String getUrl(Run n) {
+            if (n == null)
+                return null;
+            else {
+                return head + n.getNumber() + rest;
+            }
+        }
+    }
+
+    static public Node.Mode[] getNodeModes() {
+        return Node.Mode.values();
+    }
+
+    static public String getProjectListString(List<AbstractProject> projects) {
+        return Items.toNameList(projects);
+    }
+
+    @Deprecated
+    static public Object ifThenElse(boolean cond, Object thenValue, Object elseValue) {
+        return cond ? thenValue : elseValue;
+    }
+
+    static public String appendIfNotNull(String text, String suffix, String nullText) {
+        return text == null ? nullText : text + suffix;
+    }
+
+    static public Map getSystemProperties() {
+        return new TreeMap<Object, Object>(System.getProperties());
+    }
+
+    static public Map getEnvVars() {
+        return new TreeMap<String, String>(EnvVars.masterEnvVars);
+    }
+
+    static public boolean isWindows() {
+        return File.pathSeparatorChar == ';';
+    }
+
+    static public boolean isGlibcSupported() {
+        try {
+            GNUCLibrary.LIBC.getpid();
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    static public List<LogRecord> getLogRecords() {
+        return Jenkins.logRecords;
+    }
+
+    static public String printLogRecord(LogRecord r) {
+        return formatter.format(r);
+    }
+
+    @Restricted(NoExternalUse.class)
+    static public String[] printLogRecordHtml(LogRecord r, LogRecord prior) {
+        String[] oldParts = prior == null ? new String[4] : logRecordPreformat(prior);
+        String[] newParts = logRecordPreformat(r);
+        for (int i = 0; i < 3; i++) {
+            newParts[i] = "<span class='" + (newParts[i].equals(oldParts[i]) ? "logrecord-metadata-old" : "logrecord-metadata-new") + "'>" + newParts[i] + "</span>";
+        }
+        newParts[3] = Util.xmlEscape(newParts[3]);
+        return newParts;
+    }
+
+    private static String[] logRecordPreformat(LogRecord r) {
+        String source;
+        if (r.getSourceClassName() == null) {
+            source = r.getLoggerName();
+        } else {
+            if (r.getSourceMethodName() == null) {
+                source = r.getSourceClassName();
+            } else {
+                source = r.getSourceClassName() + " " + r.getSourceMethodName();
+            }
+        }
+        String message = new SimpleFormatter().formatMessage(r) + "\n";
+        Throwable x = r.getThrown();
+        return new String[] { String.format("%1$tb %1$td, %1$tY %1$tl:%1$tM:%1$tS %1$Tp", new Date(r.getMillis())), source, r.getLevel().getLocalizedName(), x == null ? message : message + printThrowable(x) + "\n" };
+    }
+
+    static public <T> Iterable<T> reverse(Collection<T> collection) {
+        List<T> list = new ArrayList<T>(collection);
+        Collections.reverse(list);
+        return list;
+    }
+
+    static public Cookie getCookie(HttpServletRequest req, String name) {
+        Cookie[] cookies = req.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if (cookie.getName().equals(name)) {
+                    return cookie;
+                }
+            }
+        }
+        return null;
+    }
+
+    static public String getCookie(HttpServletRequest req, String name, String defaultValue) {
+        Cookie c = getCookie(req, name);
+        if (c == null || c.getValue() == null)
+            return defaultValue;
+        return c.getValue();
+    }
+
+    private static final Pattern ICON_SIZE = Pattern.compile("\\d+x\\d+");
+
+    @Restricted(NoExternalUse.class)
+    static public String validateIconSize(String iconSize) throws SecurityException {
+        if (!ICON_SIZE.matcher(iconSize).matches()) {
+            throw new SecurityException("invalid iconSize");
+        }
+        return iconSize;
+    }
+
+    static public String getYuiSuffix() {
+        return DEBUG_YUI ? "debug" : "min";
+    }
+
+    static public boolean DEBUG_YUI = Boolean.getBoolean("debug.YUI");
+
+    static public <V> SortedMap<Integer, V> filter(SortedMap<Integer, V> map, String from, String to) {
+        if (from == null && to == null)
+            return map;
+        if (to == null)
+            return map.headMap(Integer.parseInt(from) - 1);
+        if (from == null)
+            return map.tailMap(Integer.parseInt(to));
+        return map.subMap(Integer.parseInt(to), Integer.parseInt(from) - 1);
+    }
+
+    @Restricted(NoExternalUse.class)
+    static public <V> SortedMap<Integer, V> filterExcludingFrom(SortedMap<Integer, V> map, String from, String to) {
+        if (from == null && to == null)
+            return map;
+        if (to == null)
+            return map.headMap(Integer.parseInt(from));
+        if (from == null)
+            return map.tailMap(Integer.parseInt(to));
+        return map.subMap(Integer.parseInt(to), Integer.parseInt(from));
+    }
+
+    private static final SimpleFormatter formatter = new SimpleFormatter();
+
+    static public void configureAutoRefresh(HttpServletRequest request, HttpServletResponse response, boolean noAutoRefresh) {
+        if (noAutoRefresh)
+            return;
+        String param = request.getParameter("auto_refresh");
+        boolean refresh = isAutoRefresh(request);
+        if (param != null) {
+            refresh = Boolean.parseBoolean(param);
+            Cookie c = new Cookie("hudson_auto_refresh", Boolean.toString(refresh));
+            c.setPath("/");
+            c.setMaxAge(60 * 60 * 24 * 30);
+            response.addCookie(c);
+        }
+        if (refresh) {
+            response.addHeader("Refresh", System.getProperty("hudson.Functions.autoRefreshSeconds", "10"));
+        }
+    }
+
+    static public boolean isAutoRefresh(HttpServletRequest request) {
+        String param = request.getParameter("auto_refresh");
+        if (param != null) {
+            return Boolean.parseBoolean(param);
+        }
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null)
+            return false;
+        for (Cookie c : cookies) {
+            if (c.getName().equals("hudson_auto_refresh")) {
+                return Boolean.parseBoolean(c.getValue());
+            }
+        }
+        return false;
+    }
+
+    static public boolean isCollapsed(String paneId) {
+        return PaneStatusProperties.forCurrentUser().isCollapsed(paneId);
+    }
+
+    static public String getNearestAncestorUrl(StaplerRequest req, Object it) {
+        List list = req.getAncestors();
+        for (int i = list.size() - 1; i >= 0; i--) {
+            Ancestor anc = (Ancestor) list.get(i);
+            if (anc.getObject() == it)
+                return anc.getUrl();
+        }
+        return null;
+    }
+
+    static public String getSearchURL() {
+        List list = Stapler.getCurrentRequest().getAncestors();
+        for (int i = list.size() - 1; i >= 0; i--) {
+            Ancestor anc = (Ancestor) list.get(i);
+            if (anc.getObject() instanceof SearchableModelObject)
+                return anc.getUrl() + "/search/";
+        }
+        return null;
+    }
+
+    static public String appendSpaceIfNotNull(String n) {
+        if (n == null)
+            return null;
+        else
+            return n + ' ';
+    }
+
+    static public String nbspIndent(String size) {
+        int i = size.indexOf('x');
+        i = Integer.parseInt(i > 0 ? size.substring(0, i) : size) / 10;
+        StringBuilder buf = new StringBuilder(30);
+        for (int j = 0; j < i; j++) buf.append("&nbsp;");
+        return buf.toString();
+    }
+
+    static public String getWin32ErrorMessage(IOException e) {
+        return Util.getWin32ErrorMessage(e);
+    }
+
+    static public boolean isMultiline(String s) {
+        if (s == null)
+            return false;
+        return s.indexOf('\r') >= 0 || s.indexOf('\n') >= 0;
+    }
+
+    static public String encode(String s) {
+        return Util.encode(s);
+    }
+
+    static public String escape(String s) {
+        return Util.escape(s);
+    }
+
+    static public String xmlEscape(String s) {
+        return Util.xmlEscape(s);
+    }
+
+    static public String xmlUnescape(String s) {
+        return s.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
+    }
+
+    static public String htmlAttributeEscape(String text) {
+        StringBuilder buf = new StringBuilder(text.length() + 64);
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (ch == '<')
+                buf.append("&lt;");
+            else if (ch == '>')
+                buf.append("&gt;");
+            else if (ch == '&')
+                buf.append("&amp;");
+            else if (ch == '"')
+                buf.append("&quot;");
+            else if (ch == '\'')
+                buf.append("&#39;");
+            else
+                buf.append(ch);
+        }
+        return buf.toString();
+    }
+
+    static public void checkPermission(Permission permission) throws IOException, ServletException {
+        checkPermission(Jenkins.getInstance(), permission);
+    }
+
+    static public void checkPermission(AccessControlled object, Permission permission) throws IOException, ServletException {
+        if (permission != null) {
+            object.checkPermission(permission);
+        }
+    }
+
+    static public void checkPermission(Object object, Permission permission) throws IOException, ServletException {
+        if (permission == null)
+            return;
+        if (object instanceof AccessControlled)
+            checkPermission((AccessControlled) object, permission);
+        else {
+            List<Ancestor> ancs = Stapler.getCurrentRequest().getAncestors();
+            for (Ancestor anc : Iterators.reverse(ancs)) {
+                Object o = anc.getObject();
+                if (o instanceof AccessControlled) {
+                    checkPermission((AccessControlled) o, permission);
+                    return;
+                }
+            }
+            checkPermission(Jenkins.getInstance(), permission);
+        }
+    }
+
+    static public boolean hasPermission(Permission permission) throws IOException, ServletException {
+        return hasPermission(Jenkins.getInstance(), permission);
+    }
+
+    static public boolean hasPermission(Object object, Permission permission) throws IOException, ServletException {
+        if (permission == null)
+            return true;
+        if (object instanceof AccessControlled)
+            return ((AccessControlled) object).hasPermission(permission);
+        else {
+            List<Ancestor> ancs = Stapler.getCurrentRequest().getAncestors();
+            for (Ancestor anc : Iterators.reverse(ancs)) {
+                Object o = anc.getObject();
+                if (o instanceof AccessControlled) {
+                    return ((AccessControlled) o).hasPermission(permission);
+                }
+            }
+            return Jenkins.getInstance().hasPermission(permission);
+        }
+    }
+
+    static public void adminCheck(StaplerRequest req, StaplerResponse rsp, Object required, Permission permission) throws IOException, ServletException {
+        if (required != null && !Hudson.adminCheck(req, rsp)) {
+            rsp.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            rsp.getOutputStream().close();
+            throw new ServletException("Unauthorized access");
+        }
+        if (permission != null)
+            checkPermission(permission);
+    }
+
+    static public String inferHudsonURL(StaplerRequest req) {
+        String rootUrl = Jenkins.getInstance().getRootUrl();
+        if (rootUrl != null)
+            return rootUrl;
+        StringBuilder buf = new StringBuilder();
+        buf.append(req.getScheme()).append("://");
+        buf.append(req.getServerName());
+        if (!(req.getScheme().equals("http") && req.getLocalPort() == 80 || req.getScheme().equals("https") && req.getLocalPort() == 443))
+            buf.append(':').append(req.getLocalPort());
+        buf.append(req.getContextPath()).append('/');
+        return buf.toString();
+    }
+
+    static public String getFooterURL() {
+        if (footerURL == null) {
+            footerURL = System.getProperty("hudson.footerURL");
+            if (StringUtils.isBlank(footerURL)) {
+                footerURL = "http://jenkins-ci.org/";
+            }
+        }
+        return footerURL;
+    }
+
+    private static String footerURL = null;
+
+    static public List<JobPropertyDescriptor> getJobPropertyDescriptors(Class<? extends Job> clazz) {
+        return JobPropertyDescriptor.getPropertyDescriptors(clazz);
+    }
+
+    static public List<JobPropertyDescriptor> getJobPropertyDescriptors(Job job) {
+        return DescriptorVisibilityFilter.apply(job, JobPropertyDescriptor.getPropertyDescriptors(job.getClass()));
+    }
+
+    static public List<Descriptor<BuildWrapper>> getBuildWrapperDescriptors(AbstractProject<?, ?> project) {
+        return BuildWrappers.getFor(project);
+    }
+
+    static public List<Descriptor<SecurityRealm>> getSecurityRealmDescriptors() {
+        return SecurityRealm.all();
+    }
+
+    static public List<Descriptor<AuthorizationStrategy>> getAuthorizationStrategyDescriptors() {
+        return AuthorizationStrategy.all();
+    }
+
+    static public List<Descriptor<Builder>> getBuilderDescriptors(AbstractProject<?, ?> project) {
+        return BuildStepDescriptor.filter(Builder.all(), project.getClass());
+    }
+
+    static public List<Descriptor<Publisher>> getPublisherDescriptors(AbstractProject<?, ?> project) {
+        return BuildStepDescriptor.filter(Publisher.all(), project.getClass());
+    }
+
+    static public List<SCMDescriptor<?>> getSCMDescriptors(AbstractProject<?, ?> project) {
+        return SCM._for(project);
+    }
+
+    static public List<Descriptor<ComputerLauncher>> getComputerLauncherDescriptors() {
+        return Jenkins.getInstance().<ComputerLauncher, Descriptor<ComputerLauncher>>getDescriptorList(ComputerLauncher.class);
+    }
+
+    static public List<Descriptor<RetentionStrategy<?>>> getRetentionStrategyDescriptors() {
+        return RetentionStrategy.all();
+    }
+
+    static public List<ParameterDescriptor> getParameterDescriptors() {
+        return ParameterDefinition.all();
+    }
+
+    static public List<Descriptor<CaptchaSupport>> getCaptchaSupportDescriptors() {
+        return CaptchaSupport.all();
+    }
+
+    static public List<Descriptor<ViewsTabBar>> getViewsTabBarDescriptors() {
+        return ViewsTabBar.all();
+    }
+
+    static public List<Descriptor<MyViewsTabBar>> getMyViewsTabBarDescriptors() {
+        return MyViewsTabBar.all();
+    }
+
+    static public List<NodePropertyDescriptor> getNodePropertyDescriptors(Class<? extends Node> clazz) {
+        List<NodePropertyDescriptor> result = new ArrayList<NodePropertyDescriptor>();
+        Collection<NodePropertyDescriptor> list = (Collection) Jenkins.getInstance().getDescriptorList(NodeProperty.class);
+        for (NodePropertyDescriptor npd : list) {
+            if (npd.isApplicable(clazz)) {
+                result.add(npd);
+            }
+        }
+        return result;
+    }
+
+    static public List<NodePropertyDescriptor> getGlobalNodePropertyDescriptors() {
+        List<NodePropertyDescriptor> result = new ArrayList<NodePropertyDescriptor>();
+        Collection<NodePropertyDescriptor> list = (Collection) Jenkins.getInstance().getDescriptorList(NodeProperty.class);
+        for (NodePropertyDescriptor npd : list) {
+            if (npd.isApplicableAsGlobal()) {
+                result.add(npd);
+            }
+        }
+        return result;
+    }
+
+    static public Collection<Descriptor> getSortedDescriptorsForGlobalConfig(Predicate<GlobalConfigurationCategory> predicate) {
+        ExtensionList<Descriptor> exts = ExtensionList.lookup(Descriptor.class);
+        List<Tag> r = new ArrayList<Tag>(exts.size());
+        for (ExtensionComponent<Descriptor> c : exts.getComponents()) {
+            Descriptor d = c.getInstance();
+            if (d.getGlobalConfigPage() == null)
+                continue;
+            if (predicate.apply(d.getCategory())) {
+                r.add(new Tag(c.ordinal(), d));
+            }
+        }
+        Collections.sort(r);
+        List<Descriptor> answer = new ArrayList<Descriptor>(r.size());
+        for (Tag d : r) answer.add(d.d);
+        return DescriptorVisibilityFilter.apply(Jenkins.getInstance(), answer);
+    }
+
+    static public Collection<Descriptor> getSortedDescriptorsForGlobalConfig() {
+        return getSortedDescriptorsForGlobalConfig(Predicates.<GlobalConfigurationCategory>alwaysTrue());
+    }
+
+    @Deprecated
+    static public Collection<Descriptor> getSortedDescriptorsForGlobalConfigNoSecurity() {
+        return getSortedDescriptorsForGlobalConfig(Predicates.not(GlobalSecurityConfiguration.FILTER));
+    }
+
+    static public Collection<Descriptor> getSortedDescriptorsForGlobalConfigUnclassified() {
+        return getSortedDescriptorsForGlobalConfig(new Predicate<GlobalConfigurationCategory>() {
+
+            public boolean apply(GlobalConfigurationCategory cat) {
+                return cat instanceof GlobalConfigurationCategory.Unclassified;
+            }
+        });
+    }
+
+    private static class Tag implements Comparable<Tag> {
+
+        double ordinal;
+
+        String hierarchy;
+
+        Descriptor d;
+
+        Tag(double ordinal, Descriptor d) {
+            this.ordinal = ordinal;
+            this.d = d;
+            this.hierarchy = buildSuperclassHierarchy(d.clazz, new StringBuilder()).toString();
+        }
+
+        private StringBuilder buildSuperclassHierarchy(Class c, StringBuilder buf) {
+            Class sc = c.getSuperclass();
+            if (sc != null)
+                buildSuperclassHierarchy(sc, buf).append(':');
+            return buf.append(c.getName());
+        }
+
+        public int compareTo(Tag that) {
+            int r = Double.compare(this.ordinal, that.ordinal);
+            if (r != 0)
+                return -r;
+            return this.hierarchy.compareTo(that.hierarchy);
+        }
+    }
+
+    static public String getIconFilePath(Action a) {
+        String name = a.getIconFileName();
+        if (name == null)
+            return null;
+        if (name.startsWith("/"))
+            return name.substring(1);
+        else
+            return "images/24x24/" + name;
+    }
+
+    static public int size2(Object o) throws Exception {
+        if (o == null)
+            return 0;
+        return ASTSizeFunction.sizeOf(o, Introspector.getUberspect());
+    }
+
+    static public String getRelativeLinkTo(Item p) {
+        Map<Object, String> ancestors = new HashMap<Object, String>();
+        View view = null;
+        StaplerRequest request = Stapler.getCurrentRequest();
+        for (Ancestor a : request.getAncestors()) {
+            ancestors.put(a.getObject(), a.getRelativePath());
+            if (a.getObject() instanceof View)
+                view = (View) a.getObject();
+        }
+        String path = ancestors.get(p);
+        if (path != null) {
+            return normalizeURI(path + '/');
+        }
+        Item i = p;
+        String url = "";
+        while (true) {
+            ItemGroup ig = i.getParent();
+            url = i.getShortUrl() + url;
+            if (ig == Jenkins.getInstance() || (view != null && ig == view.getOwnerItemGroup())) {
+                assert i instanceof TopLevelItem;
+                if (view != null) {
+                    return normalizeURI(ancestors.get(view) + '/' + url);
+                } else {
+                    return normalizeURI(request.getContextPath() + '/' + p.getUrl());
+                }
+            }
+            path = ancestors.get(ig);
+            if (path != null) {
+                return normalizeURI(path + '/' + url);
+            }
+            assert ig instanceof Item;
+            i = (Item) ig;
+        }
+    }
+
+    private static String normalizeURI(String uri) {
+        return URI.create(uri).normalize().toString();
+    }
+
+    static public List<TopLevelItem> getAllTopLevelItems(ItemGroup root) {
+        return Items.getAllItems(root, TopLevelItem.class);
+    }
+
+    static public String getRelativeNameFrom(Item p, ItemGroup g, boolean useDisplayName) {
+        if (p == null)
+            return null;
+        if (g == null)
+            return useDisplayName ? p.getFullDisplayName() : p.getFullName();
+        String separationString = useDisplayName ? " » " : "/";
+        Map<ItemGroup, Integer> parents = new HashMap<ItemGroup, Integer>();
+        int depth = 0;
+        while (g != null) {
+            parents.put(g, depth++);
+            if (g instanceof Item)
+                g = ((Item) g).getParent();
+            else
+                g = null;
+        }
+        StringBuilder buf = new StringBuilder();
+        Item i = p;
+        while (true) {
+            if (buf.length() > 0)
+                buf.insert(0, separationString);
+            buf.insert(0, useDisplayName ? i.getDisplayName() : i.getName());
+            ItemGroup gr = i.getParent();
+            Integer d = parents.get(gr);
+            if (d != null) {
+                for (int j = d; j > 0; j--) {
+                    buf.insert(0, separationString);
+                    buf.insert(0, "..");
+                }
+                return buf.toString();
+            }
+            if (gr instanceof Item)
+                i = (Item) gr;
+            else
+                return null;
+        }
+    }
+
+    static public String getRelativeNameFrom(Item p, ItemGroup g) {
+        return getRelativeNameFrom(p, g, false);
+    }
+
+    static public String getRelativeDisplayNameFrom(Item p, ItemGroup g) {
+        return getRelativeNameFrom(p, g, true);
+    }
+
+    static public Map<Thread, StackTraceElement[]> dumpAllThreads() {
+        Map<Thread, StackTraceElement[]> sorted = new TreeMap<Thread, StackTraceElement[]>(new ThreadSorter());
+        sorted.putAll(Thread.getAllStackTraces());
+        return sorted;
+    }
+
+    static public ThreadInfo[] getThreadInfos() {
+        ThreadMXBean mbean = ManagementFactory.getThreadMXBean();
+        return mbean.dumpAllThreads(mbean.isObjectMonitorUsageSupported(), mbean.isSynchronizerUsageSupported());
+    }
+
+    static public ThreadGroupMap sortThreadsAndGetGroupMap(ThreadInfo[] list) {
+        ThreadGroupMap sorter = new ThreadGroupMap();
+        Arrays.sort(list, sorter);
+        return sorter;
+    }
+
+    private static class ThreadSorterBase {
+
+        protected Map<Long, String> map = new HashMap<Long, String>();
+
+        private ThreadSorterBase() {
+            ThreadGroup tg = Thread.currentThread().getThreadGroup();
+            while (tg.getParent() != null) tg = tg.getParent();
+            Thread[] threads = new Thread[tg.activeCount() * 2];
+            int threadsLen = tg.enumerate(threads, true);
+            for (int i = 0; i < threadsLen; i++) {
+                ThreadGroup group = threads[i].getThreadGroup();
+                map.put(threads[i].getId(), group != null ? group.getName() : null);
+            }
+        }
+
+        protected int compare(long idA, long idB) {
+            String tga = map.get(idA), tgb = map.get(idB);
+            int result = (tga != null ? -1 : 0) + (tgb != null ? 1 : 0);
+            if (result == 0 && tga != null)
+                result = tga.compareToIgnoreCase(tgb);
+            return result;
+        }
+    }
+
+    static public class ThreadGroupMap extends ThreadSorterBase implements Comparator<ThreadInfo> {
+
+        public String getThreadGroup(ThreadInfo ti) {
+            return map.get(ti.getThreadId());
+        }
+
+        public int compare(ThreadInfo a, ThreadInfo b) {
+            int result = compare(a.getThreadId(), b.getThreadId());
+            if (result == 0)
+                result = a.getThreadName().compareToIgnoreCase(b.getThreadName());
+            return result;
+        }
+    }
+
+    private static class ThreadSorter extends ThreadSorterBase implements Comparator<Thread> {
+
+        public int compare(Thread a, Thread b) {
+            int result = compare(a.getId(), b.getId());
+            if (result == 0)
+                result = a.getName().compareToIgnoreCase(b.getName());
+            return result;
+        }
+    }
+
+    @Deprecated
+    static public boolean isMustangOrAbove() {
+        return true;
+    }
+
+    static public String dumpThreadInfo(ThreadInfo ti, ThreadGroupMap map) {
+        String grp = map.getThreadGroup(ti);
+        StringBuilder sb = new StringBuilder("\"" + ti.getThreadName() + "\"" + " Id=" + ti.getThreadId() + " Group=" + (grp != null ? grp : "?") + " " + ti.getThreadState());
+        if (ti.getLockName() != null) {
+            sb.append(" on " + ti.getLockName());
+        }
+        if (ti.getLockOwnerName() != null) {
+            sb.append(" owned by \"" + ti.getLockOwnerName() + "\" Id=" + ti.getLockOwnerId());
+        }
+        if (ti.isSuspended()) {
+            sb.append(" (suspended)");
+        }
+        if (ti.isInNative()) {
+            sb.append(" (in native)");
+        }
+        sb.append('\n');
+        StackTraceElement[] stackTrace = ti.getStackTrace();
+        for (int i = 0; i < stackTrace.length; i++) {
+            StackTraceElement ste = stackTrace[i];
+            sb.append("\tat ").append(ste);
+            sb.append('\n');
+            if (i == 0 && ti.getLockInfo() != null) {
+                Thread.State ts = ti.getThreadState();
+                switch(ts) {
+                    case BLOCKED:
+                        sb.append("\t-  blocked on ").append(ti.getLockInfo());
+                        sb.append('\n');
+                        break;
+                    case WAITING:
+                        sb.append("\t-  waiting on ").append(ti.getLockInfo());
+                        sb.append('\n');
+                        break;
+                    case TIMED_WAITING:
+                        sb.append("\t-  waiting on ").append(ti.getLockInfo());
+                        sb.append('\n');
+                        break;
+                    default:
+                }
+            }
+            for (MonitorInfo mi : ti.getLockedMonitors()) {
+                if (mi.getLockedStackDepth() == i) {
+                    sb.append("\t-  locked ").append(mi);
+                    sb.append('\n');
+                }
+            }
+        }
+        LockInfo[] locks = ti.getLockedSynchronizers();
+        if (locks.length > 0) {
+            sb.append("\n\tNumber of locked synchronizers = " + locks.length);
+            sb.append('\n');
+            for (LockInfo li : locks) {
+                sb.append("\t- ").append(li);
+                sb.append('\n');
+            }
+        }
+        sb.append('\n');
+        return sb.toString();
+    }
+
+    static public <T> Collection<T> emptyList() {
+        return Collections.emptyList();
+    }
+
+    static public String jsStringEscape(String s) {
+        StringBuilder buf = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char ch = s.charAt(i);
+            switch(ch) {
+                case '\'':
+                    buf.append("\\'");
+                    break;
+                case '\\':
+                    buf.append("\\\\");
+                    break;
+                case '"':
+                    buf.append("\\\"");
+                    break;
+                default:
+                    buf.append(ch);
+            }
+        }
+        return buf.toString();
+    }
+
+    static public String capitalize(String s) {
+        if (s == null || s.length() == 0)
+            return s;
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    static public String getVersion() {
+        return Jenkins.VERSION;
+    }
+
+    static public String getResourcePath() {
+        return Jenkins.RESOURCE_PATH;
+    }
+
+    static public String getViewResource(Object it, String path) {
+        Class clazz = it.getClass();
+        if (it instanceof Class)
+            clazz = (Class) it;
+        if (it instanceof Descriptor)
+            clazz = ((Descriptor) it).clazz;
+        StringBuilder buf = new StringBuilder(Stapler.getCurrentRequest().getContextPath());
+        buf.append(Jenkins.VIEW_RESOURCE_PATH).append('/');
+        buf.append(clazz.getName().replace('.', '/').replace('$', '/'));
+        buf.append('/').append(path);
+        return buf.toString();
+    }
+
+    static public boolean hasView(Object it, String path) throws IOException {
+        if (it == null)
+            return false;
+        return Stapler.getCurrentRequest().getView(it, path) != null;
+    }
+
+    static public boolean defaultToTrue(Boolean b) {
+        if (b == null)
+            return true;
+        return b;
+    }
+
+    static public <T> T defaulted(T value, T defaultValue) {
+        return value != null ? value : defaultValue;
+    }
+
+    static public String printThrowable(@CheckForNull Throwable t) {
+        if (t == null) {
+            return Messages.Functions_NoExceptionDetails();
+        }
+        StringWriter sw = new StringWriter();
+        t.printStackTrace(new PrintWriter(sw));
+        return sw.toString();
+    }
+
+    static public int determineRows(String s) {
+        if (s == null)
+            return 5;
+        return Math.max(5, LINE_END.split(s).length);
+    }
+
+    static public String toCCStatus(Item i) {
+        if (i instanceof Job) {
+            Job j = (Job) i;
+            switch(j.getIconColor()) {
+                case ABORTED:
+                case ABORTED_ANIME:
+                case RED:
+                case RED_ANIME:
+                case YELLOW:
+                case YELLOW_ANIME:
+                    return "Failure";
+                case BLUE:
+                case BLUE_ANIME:
+                    return "Success";
+                case DISABLED:
+                case DISABLED_ANIME:
+                case GREY:
+                case GREY_ANIME:
+                case NOTBUILT:
+                case NOTBUILT_ANIME:
+                    return "Unknown";
+            }
+        }
+        return "Unknown";
+    }
+
+    private static final Pattern LINE_END = Pattern.compile("\r?\n");
+
+    static public boolean isAnonymous() {
+        return Jenkins.getAuthentication() instanceof AnonymousAuthenticationToken;
+    }
+
+    static public JellyContext getCurrentJellyContext() {
+        JellyContext context = ExpressionFactory2.CURRENT_CONTEXT.get();
+        assert context != null;
+        return context;
+    }
+
+    static public String runScript(Script script) throws JellyTagException {
+        StringWriter out = new StringWriter();
+        script.run(getCurrentJellyContext(), XMLOutput.createXMLOutput(out));
+        return out.toString();
+    }
+
+    static public <T> List<T> subList(List<T> base, int maxSize) {
+        if (maxSize < base.size())
+            return base.subList(0, maxSize);
+        else
+            return base;
+    }
+
+    static public String joinPath(String... components) {
+        StringBuilder buf = new StringBuilder();
+        for (String s : components) {
+            if (s.length() == 0)
+                continue;
+            if (buf.length() > 0) {
+                if (buf.charAt(buf.length() - 1) != '/')
+                    buf.append('/');
+                if (s.charAt(0) == '/')
+                    s = s.substring(1);
+            }
+            buf.append(s);
+        }
+        return buf.toString();
+    }
+
+    @CheckForNull
+    static public String getActionUrl(String itUrl, Action action) {
+        String urlName = action.getUrlName();
+        if (urlName == null)
+            return null;
+        try {
+            if (new URI(urlName).isAbsolute()) {
+                return urlName;
+            }
+        } catch (URISyntaxException x) {
+            Logger.getLogger(Functions.class.getName()).log(Level.WARNING, "Failed to parse URL for {0}: {1}", new Object[] { action, x });
+            return null;
+        }
+        if (urlName.startsWith("/"))
+            return joinPath(Stapler.getCurrentRequest().getContextPath(), urlName);
+        else
+            return joinPath(Stapler.getCurrentRequest().getContextPath() + '/' + itUrl, urlName);
+    }
+
+    static public String toEmailSafeString(String projectName) {
+        StringBuilder buf = new StringBuilder(projectName.length());
+        for (int i = 0; i < projectName.length(); i++) {
+            char ch = projectName.charAt(i);
+            if (('a' <= ch && ch <= 'z') || ('z' <= ch && ch <= 'Z') || ('0' <= ch && ch <= '9') || "-_.".indexOf(ch) >= 0)
+                buf.append(ch);
+            else
+                buf.append('_');
+        }
+        return projectName;
+    }
+
+    public String getSystemProperty(String key) {
+        return System.getProperty(key);
+    }
+
+    public String getServerName() {
+        String url = Jenkins.getInstance().getRootUrl();
+        try {
+            if (url != null) {
+                String host = new URL(url).getHost();
+                if (host != null)
+                    return host;
+            }
+        } catch (MalformedURLException e) {
+        }
+        return Stapler.getCurrentRequest().getServerName();
+    }
+
+    @Deprecated
+    public String getCheckUrl(String userDefined, Object descriptor, String field) {
+        if (userDefined != null || field == null)
+            return userDefined;
+        if (descriptor instanceof Descriptor) {
+            Descriptor d = (Descriptor) descriptor;
+            return d.getCheckUrl(field);
+        }
+        return null;
+    }
+
+    public void calcCheckUrl(Map attributes, String userDefined, Object descriptor, String field) {
+        if (userDefined != null || field == null)
+            return;
+        if (descriptor instanceof Descriptor) {
+            Descriptor d = (Descriptor) descriptor;
+            CheckMethod m = d.getCheckMethod(field);
+            attributes.put("checkUrl", m.toStemUrl());
+            attributes.put("checkDependsOn", m.getDependsOn());
+        }
+    }
+
+    public boolean hyperlinkMatchesCurrentPage(String href) throws UnsupportedEncodingException {
+        String url = Stapler.getCurrentRequest().getRequestURL().toString();
+        if (href == null || href.length() <= 1)
+            return ".".equals(href) && url.endsWith("/");
+        url = URLDecoder.decode(url, "UTF-8");
+        href = URLDecoder.decode(href, "UTF-8");
+        if (url.endsWith("/"))
+            url = url.substring(0, url.length() - 1);
+        if (href.endsWith("/"))
+            href = href.substring(0, href.length() - 1);
+        return url.endsWith(href);
+    }
+
+    public <T> List<T> singletonList(T t) {
+        return Collections.singletonList(t);
+    }
+
+    static public List<PageDecorator> getPageDecorators() {
+        if (Jenkins.getInstanceOrNull() == null)
+            return Collections.emptyList();
+        return PageDecorator.all();
+    }
+
+    static public List<Descriptor<Cloud>> getCloudDescriptors() {
+        return Cloud.all();
+    }
+
+    public String prepend(String prefix, String body) {
+        if (body != null && body.length() > 0)
+            return prefix + body;
+        return body;
+    }
+
+    static public List<Descriptor<CrumbIssuer>> getCrumbIssuerDescriptors() {
+        return CrumbIssuer.all();
+    }
+
+    static public String getCrumb(StaplerRequest req) {
+        Jenkins h = Jenkins.getInstanceOrNull();
+        CrumbIssuer issuer = h != null ? h.getCrumbIssuer() : null;
+        return issuer != null ? issuer.getCrumb(req) : "";
+    }
+
+    static public String getCrumbRequestField() {
+        Jenkins h = Jenkins.getInstanceOrNull();
+        CrumbIssuer issuer = h != null ? h.getCrumbIssuer() : null;
+        return issuer != null ? issuer.getDescriptor().getCrumbRequestField() : "";
+    }
+
+    static public Date getCurrentTime() {
+        return new Date();
+    }
+
+    static public Locale getCurrentLocale() {
+        Locale locale = null;
+        StaplerRequest req = Stapler.getCurrentRequest();
+        if (req != null)
+            locale = req.getLocale();
+        if (locale == null)
+            locale = Locale.getDefault();
+        return locale;
+    }
+
+    static public String generateConsoleAnnotationScriptAndStylesheet() {
+        String cp = Stapler.getCurrentRequest().getContextPath();
+        StringBuilder buf = new StringBuilder();
+        for (ConsoleAnnotatorFactory f : ConsoleAnnotatorFactory.all()) {
+            String path = cp + "/extensionList/" + ConsoleAnnotatorFactory.class.getName() + "/" + f.getClass().getName();
+            if (f.hasScript())
+                buf.append("<script src='").append(path).append("/script.js'></script>");
+            if (f.hasStylesheet())
+                buf.append("<link rel='stylesheet' type='text/css' href='").append(path).append("/style.css' />");
+        }
+        for (ConsoleAnnotationDescriptor d : ConsoleAnnotationDescriptor.all()) {
+            String path = cp + "/descriptor/" + d.clazz.getName();
+            if (d.hasScript())
+                buf.append("<script src='").append(path).append("/script.js'></script>");
+            if (d.hasStylesheet())
+                buf.append("<link rel='stylesheet' type='text/css' href='").append(path).append("/style.css' />");
+        }
+        return buf.toString();
+    }
+
+    public List<String> getLoggerNames() {
+        while (true) {
+            try {
+                List<String> r = new ArrayList<String>();
+                Enumeration<String> e = LogManager.getLogManager().getLoggerNames();
+                while (e.hasMoreElements()) r.add(e.nextElement());
+                return r;
+            } catch (ConcurrentModificationException e) {
+            }
+        }
+    }
+
+    public String getPasswordValue(Object o) {
+        if (o == null)
+            return null;
+        if (o instanceof Secret)
+            return ((Secret) o).getEncryptedValue();
+        if (getIsUnitTest()) {
+            throw new SecurityException("attempted to render plaintext ‘" + o + "’ in password field; use a getter of type Secret instead");
+        }
+        return o.toString();
+    }
+
+    public List filterDescriptors(Object context, Iterable descriptors) {
+        return DescriptorVisibilityFilter.apply(context, descriptors);
+    }
+
+    static public boolean getIsUnitTest() {
+        return Main.isUnitTest;
+    }
+
+    static public boolean isArtifactsPermissionEnabled() {
+        return Boolean.getBoolean("hudson.security.ArtifactsPermission");
+    }
+
+    static public boolean isWipeOutPermissionEnabled() {
+        return Boolean.getBoolean("hudson.security.WipeOutPermission");
+    }
+
+    static public String createRenderOnDemandProxy(JellyContext context, String attributesToCapture) {
+        return Stapler.getCurrentRequest().createJavaScriptProxy(new RenderOnDemandClosure(context, attributesToCapture));
+    }
+
+    static public String getCurrentDescriptorByNameUrl() {
+        return Descriptor.getCurrentDescriptorByNameUrl();
+    }
+
+    static public String setCurrentDescriptorByNameUrl(String value) {
+        String o = getCurrentDescriptorByNameUrl();
+        Stapler.getCurrentRequest().setAttribute("currentDescriptorByNameUrl", value);
+        return o;
+    }
+
+    static public void restoreCurrentDescriptorByNameUrl(String old) {
+        Stapler.getCurrentRequest().setAttribute("currentDescriptorByNameUrl", old);
+    }
+
+    static public List<String> getRequestHeaders(String name) {
+        List<String> r = new ArrayList<String>();
+        Enumeration e = Stapler.getCurrentRequest().getHeaders(name);
+        while (e.hasMoreElements()) {
+            r.add(e.nextElement().toString());
+        }
+        return r;
+    }
+
+    static public Object rawHtml(Object o) {
+        return o == null ? null : new RawHtmlArgument(o);
+    }
+
+    static public ArrayList<CLICommand> getCLICommands() {
+        ArrayList<CLICommand> all = new ArrayList<CLICommand>(CLICommand.all());
+        Collections.sort(all, new Comparator<CLICommand>() {
+
+            public int compare(CLICommand cliCommand, CLICommand cliCommand1) {
+                return cliCommand.getName().compareTo(cliCommand1.getName());
+            }
+        });
+        return all;
+    }
+
+    static public String getAvatar(User user, String avatarSize) {
+        return UserAvatarResolver.resolve(user, avatarSize);
+    }
+
+    @Deprecated
+    public String getUserAvatar(User user, String avatarSize) {
+        return getAvatar(user, avatarSize);
+    }
+
+    static public String humanReadableByteSize(long size) {
+        String measure = "B";
+        if (size < 1024) {
+            return size + " " + measure;
+        }
+        Double number = new Double(size);
+        if (number >= 1024) {
+            number = number / 1024;
+            measure = "KB";
+            if (number >= 1024) {
+                number = number / 1024;
+                measure = "MB";
+                if (number >= 1024) {
+                    number = number / 1024;
+                    measure = "GB";
+                }
+            }
+        }
+        DecimalFormat format = new DecimalFormat("#0.00");
+        return format.format(number) + " " + measure;
+    }
+
+    static public String breakableString(final String plain) {
+        if (plain == null) {
+            return null;
+        }
+        return plain.replaceAll("([\\p{Punct}&&[^;]]+\\w)", "<wbr>$1").replaceAll("([^\\p{Punct}\\s-]{20})(?=[^\\p{Punct}\\s-]{10})", "$1<wbr>");
+    }
+
+    static public void advertiseHeaders(HttpServletResponse rsp) {
+        Jenkins j = Jenkins.getInstanceOrNull();
+        if (j != null) {
+            rsp.setHeader("X-Hudson", "1.395");
+            rsp.setHeader("X-Jenkins", Jenkins.VERSION);
+            rsp.setHeader("X-Jenkins-Session", Jenkins.SESSION_HASH);
+            TcpSlaveAgentListener tal = j.tcpSlaveAgentListener;
+            if (tal != null) {
+                int p = tal.getAdvertisedPort();
+                rsp.setIntHeader("X-Hudson-CLI-Port", p);
+                rsp.setIntHeader("X-Jenkins-CLI-Port", p);
+                rsp.setIntHeader("X-Jenkins-CLI2-Port", p);
+                rsp.setHeader("X-Jenkins-CLI-Host", TcpSlaveAgentListener.CLI_HOST_NAME);
+            }
+        }
+    }
+
+    @Restricted(NoExternalUse.class)
+    static public boolean isContextMenuVisible(Action a) {
+        if (a instanceof ModelObjectWithContextMenu.ContextMenuVisibility) {
+            return ((ModelObjectWithContextMenu.ContextMenuVisibility) a).isVisible();
+        } else {
+            return true;
+        }
+    }
+}

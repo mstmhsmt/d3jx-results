@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.6;1327-1342;org.elasticsearch.painless.Definition.getType(String);1366-1381;org.elasticsearch.painless.Definition.getTypeInternal(String)
+Extract Method;method;0.6;1344-1391;org.elasticsearch.painless.Definition.getType(Struct, int);1383-1430;org.elasticsearch.painless.Definition.getTypeInternal(Struct, int)

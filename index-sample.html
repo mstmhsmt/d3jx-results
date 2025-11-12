@@ -1,0 +1,141 @@
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>sample</title>
+<link rel="stylesheet" type="text/css" href="./js/demo.css"/>
+<style type="text/css">
+<!--
+.noframe {
+  margin: 0;
+  padding: 0;
+  margin-top: 2px;
+  line-height: 100%;
+  border-style: none;
+}
+.datetime {
+  display: none;
+}
+-->
+</style>
+<script src="./js/jquery.min.js"></script>
+<script type="text/javascript">
+function conv_datetime () {
+  $(".datetime").each(function (i, elem) {
+    var dt = new Date($(elem).text());
+    dt = new Date(dt.getTime() - 9 * 60 * 60 * 1000); // !!!
+    $(elem).text(dt.toLocaleString()).css("display", "inline");
+  });
+}
+</script>
+</head>
+<body>
+
+<h1>sample Projects</h1>
+
+<h2>sample/sample</h2>
+<div class="moreindent">
+<table>
+<tr>
+<th rowspan="2" style="vertical-align:middle;">ID</th>
+<th rowspan="2" style="vertical-align:middle;">Commit</th>
+<th rowspan="2" style="vertical-align:middle;">SLOC (avg)</th>
+<th colspan="10">Hunk Conflict Count</th>
+</tr>
+<tr>
+<th>git-merge</th>
+<th>imediff</th>
+<th>jFSTMerge</th>
+<th>JDime</th>
+<th>Automerge-PTM</th>
+<th>IntelliMerge</th>
+<th>Spork</th>
+<th>Mergiraf</th>
+<th>Mastery</th>
+<th>D3J</th>
+</tr>
+<tr><td><a href="out/sample/work/sample/sample/000.html" target="_blank">000</a></td><td style="text-align:left;font-family:monospace;">M</td><td>None</td><td><a href="out/sample/work/sample/sample/git-merge/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/imediff/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/jfstmerge/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/jdime/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/automergeptm/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/intellimerge/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/sample/sample/spork/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/sample/sample/mergiraf/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/mastery/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/d3j/patched-000.java" target="_blank">0</a></td></tr>
+<tr><td><a href="out/sample/work/sample/sample/001.html" target="_blank">001</a></td><td style="text-align:left;font-family:monospace;">M</td><td>None</td><td><a href="out/sample/work/sample/sample/git-merge/out-001.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/imediff/out-001.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/jfstmerge/out-001.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/jdime/out-001.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/automergeptm/out-001.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/intellimerge/out-001.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/spork/out-001.java" target="_blank">0</a></td><td><a href="out/sample/work/sample/sample/mergiraf/out-001.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/mastery/out-001.java" target="_blank">1</a></td><td><a href="out/sample/work/sample/sample/d3j/patched-001.java" target="_blank">1</a></td></tr>
+</table>
+</div>
+<h2>sample/twitter4j</h2>
+<div class="moreindent">
+<table>
+<tr>
+<th rowspan="2" style="vertical-align:middle;">ID</th>
+<th rowspan="2" style="vertical-align:middle;">Commit</th>
+<th rowspan="2" style="vertical-align:middle;">SLOC (avg)</th>
+<th colspan="10">Hunk Conflict Count</th>
+</tr>
+<tr>
+<th>git-merge</th>
+<th>imediff</th>
+<th>jFSTMerge</th>
+<th>JDime</th>
+<th>Automerge-PTM</th>
+<th>IntelliMerge</th>
+<th>Spork</th>
+<th>Mergiraf</th>
+<th>Mastery</th>
+<th>D3J</th>
+</tr>
+<tr><td><a href="out/sample/work/sample/twitter4j/000.html" target="_blank">000</a></td><td style="text-align:left;font-family:monospace;">M</td><td>None</td><td><a href="out/sample/work/sample/twitter4j/git-merge/out-000.java" target="_blank">3</a></td><td><a href="out/sample/work/sample/twitter4j/imediff/out-000.java" target="_blank">2</a></td><td><a href="out/sample/work/sample/twitter4j/jfstmerge/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/sample/twitter4j/jdime/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/sample/twitter4j/automergeptm/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/sample/twitter4j/intellimerge/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/sample/twitter4j/spork/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/sample/twitter4j/mergiraf/out-000.java" target="_blank">2</a></td><td><a href="out/sample/work/sample/twitter4j/mastery/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/sample/twitter4j/d3j/patched-000.java" target="_blank">1</a></td></tr>
+</table>
+</div>
+<h2>bad/bad</h2>
+<div class="moreindent">
+<table>
+<tr>
+<th rowspan="2" style="vertical-align:middle;">ID</th>
+<th rowspan="2" style="vertical-align:middle;">Commit</th>
+<th rowspan="2" style="vertical-align:middle;">SLOC (avg)</th>
+<th colspan="10">Hunk Conflict Count</th>
+</tr>
+<tr>
+<th>git-merge</th>
+<th>imediff</th>
+<th>jFSTMerge</th>
+<th>JDime</th>
+<th>Automerge-PTM</th>
+<th>IntelliMerge</th>
+<th>Spork</th>
+<th>Mergiraf</th>
+<th>Mastery</th>
+<th>D3J</th>
+</tr>
+<tr><td><a href="out/sample/work/bad/bad/000.html" target="_blank">000</a></td><td style="text-align:left;font-family:monospace;">M</td><td>None</td><td><a href="out/sample/work/bad/bad/git-merge/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/bad/bad/imediff/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/bad/jfstmerge/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/bad/bad/jdime/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/bad/automergeptm/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/bad/intellimerge/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/bad/bad/spork/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/bad/mergiraf/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/bad/mastery/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/bad/bad/d3j/patched-000.java" target="_blank">0</a></td></tr>
+</table>
+</div>
+<h2>bad/broken</h2>
+<div class="moreindent">
+<table>
+<tr>
+<th rowspan="2" style="vertical-align:middle;">ID</th>
+<th rowspan="2" style="vertical-align:middle;">Commit</th>
+<th rowspan="2" style="vertical-align:middle;">SLOC (avg)</th>
+<th colspan="10">Hunk Conflict Count</th>
+</tr>
+<tr>
+<th>git-merge</th>
+<th>imediff</th>
+<th>jFSTMerge</th>
+<th>JDime</th>
+<th>Automerge-PTM</th>
+<th>IntelliMerge</th>
+<th>Spork</th>
+<th>Mergiraf</th>
+<th>Mastery</th>
+<th>D3J</th>
+</tr>
+<tr><td><a href="out/sample/work/bad/broken/000.html" target="_blank">000</a></td><td style="text-align:left;font-family:monospace;">M</td><td>None</td><td><a href="out/sample/work/bad/broken/git-merge/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/broken/imediff/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/broken/jfstmerge/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/broken/jdime/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/broken/automergeptm/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/broken/intellimerge/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/broken/spork/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/broken/mergiraf/out-000.java" target="_blank">0</a></td><td><a href="out/sample/work/bad/broken/mastery/out-000.java" target="_blank">1</a></td><td><a href="out/sample/work/bad/broken/d3j/patched-000.java" target="_blank">0</a></td></tr>
+</table>
+</div>
+
+<script>
+$(function () {
+conv_datetime();
+});
+</script>
+
+</body>
+</html>

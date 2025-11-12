@@ -1,0 +1,213 @@
+package checkers.basetype;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Constructor;
+import com.sun.source.tree.CompilationUnitTree;
+import checkers.quals.PolymorphicQualifier;
+import checkers.quals.SubtypeOf;
+import checkers.quals.TypeQualifiers;
+import checkers.source.SourceChecker;
+import checkers.source.SourceVisitor;
+import checkers.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.util.Elements;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Collections;
+import java.util.Arrays;
+import java.lang.reflect.InvocationTargetException;
+import checkers.util.MultiGraphQualifierHierarchy;
+import checkers.util.GraphQualifierHierarchy;
+import checkers.types.TypeHierarchy;
+import checkers.types.QualifierHierarchy;
+import checkers.types.BasicAnnotatedTypeFactory;
+import checkers.types.AnnotatedTypeFactory;
+import checkers.quals.MonotonicAnnotation;
+import javacutils.ErrorReporter;
+import javacutils.AnnotationUtils;
+import javacutils.AbstractTypeProcessor;
+
+public abstract class BaseTypeChecker extends SourceChecker {
+
+    private Set<Class<? extends Annotation>> supportedQuals;
+
+    private QualifierHierarchy qualHierarchy;
+
+    private TypeHierarchy typeHierarchy;
+
+    @Override
+    public void initChecker() {
+        super.initChecker();
+        this.supportedQuals = this.createSupportedTypeQualifiers();
+        this.qualHierarchy = this.getQualifierHierarchy();
+        this.typeHierarchy = this.createTypeHierarchy();
+    }
+
+    protected Set<Class<? extends Annotation>> createSupportedTypeQualifiers() {
+        Class<?> classType = this.getClass();
+        TypeQualifiers typeQualifiersAnnotation = classType.getAnnotation(TypeQualifiers.class);
+        if (typeQualifiersAnnotation == null)
+            return Collections.emptySet();
+        Set<Class<? extends Annotation>> typeQualifiers = new HashSet<Class<? extends Annotation>>();
+        for (Class<? extends Annotation> qualifier : typeQualifiersAnnotation.value()) {
+            typeQualifiers.add(qualifier);
+        }
+        return Collections.unmodifiableSet(typeQualifiers);
+    }
+
+    public final Set<Class<? extends Annotation>> getSupportedTypeQualifiers() {
+        if (supportedQuals == null)
+            supportedQuals = createSupportedTypeQualifiers();
+        return supportedQuals;
+    }
+
+    protected MultiGraphQualifierHierarchy.MultiGraphFactory createQualifierHierarchyFactory() {
+        return new MultiGraphQualifierHierarchy.MultiGraphFactory(this);
+    }
+
+    public QualifierHierarchy createQualifierHierarchy(MultiGraphFactory factory) {
+        return new GraphQualifierHierarchy(factory, null);
+    }
+
+    public final QualifierHierarchy getQualifierHierarchy() {
+        if (qualHierarchy == null)
+            qualHierarchy = createQualifierHierarchy();
+        return qualHierarchy;
+    }
+
+    protected TypeHierarchy createTypeHierarchy() {
+        return new TypeHierarchy(this, getQualifierHierarchy());
+    }
+
+    public final TypeHierarchy getTypeHierarchy() {
+        if (typeHierarchy == null)
+            typeHierarchy = createTypeHierarchy();
+        return typeHierarchy;
+    }
+
+    @Override
+    protected SourceVisitor<?, ?> createSourceVisitor(CompilationUnitTree root) {
+        Class<?> checkerClass = this.getClass();
+        while (checkerClass != BaseTypeChecker.class) {
+            final String classToLoad = checkerClass.getName().replace("Checker", "Visitor").replace("Subchecker", "Visitor");
+            BaseTypeVisitor<?> result = invokeConstructorFor(classToLoad, new Class<?>[] { checkerClass, CompilationUnitTree.class }, new Object[] { this, root });
+            if (result != null)
+                return result;
+            checkerClass = checkerClass.getSuperclass();
+        }
+        return new BaseTypeVisitor<BaseTypeChecker>(this, root);
+    }
+
+    @Override
+    public AnnotatedTypeFactory createFactory(CompilationUnitTree root) {
+        Class<?> checkerClass = this.getClass();
+        while (checkerClass != BaseTypeChecker.class) {
+            final String classToLoad = checkerClass.getName().replace("Checker", "AnnotatedTypeFactory").replace("Subchecker", "AnnotatedTypeFactory");
+            AnnotatedTypeFactory result = invokeConstructorFor(classToLoad, new Class<?>[] { checkerClass, CompilationUnitTree.class }, new Object[] { this, root });
+            if (result != null)
+                return result;
+            checkerClass = checkerClass.getSuperclass();
+        }
+        return new BasicAnnotatedTypeFactory<BaseTypeChecker>(this, root);
+    }
+
+    @Override
+    public Set<String> getSupportedLintOptions() {
+        Set<String> lintSet = new HashSet<String>(super.getSupportedLintOptions());
+        lintSet.add("cast");
+        lintSet.add("cast:redundant");
+        lintSet.add("cast:unsafe");
+        lintSet.add("flow:inferFromAsserts");
+        lintSet.add("arrays:invariant");
+        lintSet.add("cast:strict");
+        return Collections.unmodifiableSet(lintSet);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> T invokeConstructorFor(String name, Class<?>[] paramTypes, Object[] args) {
+        Class<T> cls = null;
+        try {
+            cls = (Class<T>) Class.forName(name);
+        } catch (Exception e) {
+            return null;
+        }
+        assert cls != null : "reflectively loading " + name + " failed";
+        try {
+            Constructor<T> ctor = cls.getConstructor(paramTypes);
+            return ctor.newInstance(args);
+        } catch (Throwable t) {
+            if (t instanceof InvocationTargetException) {
+                Throwable err = t.getCause();
+                String msg;
+                if (err instanceof CheckerError) {
+                    msg = err.getMessage();
+                } else {
+                    msg = err.toString();
+                }
+                SourceChecker.errorAbort("InvocationTargetException when invoking constructor for class " + name + "; Underlying cause: " + msg, t);
+            } else {
+                ErrorReporter.errorAbort("Unexpected " + t.getClass().getSimpleName() + " for " + "class " + name + " when invoking the constructor; parameter types: " + Arrays.toString(paramTypes), t);
+            }
+            return null;
+        }
+    }
+
+    protected QualifierHierarchy createQualifierHierarchy() {
+        Set<Class<? extends Annotation>> supportedTypeQualifiers = getSupportedTypeQualifiers();
+        MultiGraphQualifierHierarchy.MultiGraphFactory factory = this.createQualifierHierarchyFactory();
+        Elements elements = processingEnv.getElementUtils();
+        return createQualifierHierarchy(elements, supportedTypeQualifiers, factory);
+    }
+
+    public final Set<Class<? extends Annotation>> getSupportedMonotonicTypeQualifiers() {
+        if (supportedMonotonicQuals == null) {
+            supportedMonotonicQuals = new HashSet<>();
+            for (Class<? extends Annotation> anno : getSupportedTypeQualifiers()) {
+                MonotonicAnnotation mono = anno.getAnnotation(MonotonicAnnotation.class);
+                if (mono != null) {
+                    supportedMonotonicQuals.add(anno);
+                }
+            }
+        }
+        return supportedMonotonicQuals;
+    }
+
+    private Set<Class<? extends Annotation>> supportedMonotonicQuals;
+
+    protected static QualifierHierarchy createQualifierHierarchy(Elements elements, Set<Class<? extends Annotation>> supportedTypeQualifiers, MultiGraphFactory factory) {
+        for (Class<? extends Annotation> typeQualifier : supportedTypeQualifiers) {
+            AnnotationMirror typeQualifierAnno = AnnotationUtils.fromClass(elements, typeQualifier);
+            assert typeQualifierAnno != null : "Loading annotation \"" + typeQualifier + "\" failed!";
+            factory.addQualifier(typeQualifierAnno);
+            if (typeQualifier.getAnnotation(PolymorphicQualifier.class) != null) {
+                if (typeQualifier.getAnnotation(SubtypeOf.class) != null) {
+                    ErrorReporter.errorAbort("BaseTypeChecker: " + typeQualifier + " is polymorphic and specifies super qualifiers. " + "Remove the @checkers.quals.SubtypeOf or @checkers.quals.PolymorphicQualifier annotation from it.");
+                }
+                continue;
+            }
+            if (typeQualifier.getAnnotation(SubtypeOf.class) == null) {
+                ErrorReporter.errorAbort("BaseTypeChecker: " + typeQualifier + " does not specify its super qualifiers. " + "Add an @checkers.quals.SubtypeOf annotation to it.");
+            }
+            Class<? extends Annotation>[] superQualifiers = typeQualifier.getAnnotation(SubtypeOf.class).value();
+            for (Class<? extends Annotation> superQualifier : superQualifiers) {
+                AnnotationMirror superAnno = null;
+                superAnno = AnnotationUtils.fromClass(elements, superQualifier);
+                factory.addSubtype(typeQualifierAnno, superAnno);
+            }
+        }
+        QualifierHierarchy hierarchy = factory.build();
+        if (hierarchy.getTypeQualifiers().size() < 1) {
+            ErrorReporter.errorAbort("BaseTypeChecker: invalid qualifier hierarchy: hierarchy requires at least one annotation: " + hierarchy.getTypeQualifiers());
+        }
+        return hierarchy;
+    }
+
+    public boolean isSupportedAnnotation(AnnotationMirror anno) {
+        for (Class<? extends Annotation> c : getSupportedTypeQualifiers()) {
+            if (AnnotationUtils.areSameByClass(anno, c)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}

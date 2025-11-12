@@ -1,0 +1,5 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.86;371-375;backtype.storm.utils.Utils.newCuratorStarted(Map, List, Object, String);384-388;backtype.storm.utils.Utils.newCuratorStarted(Map, List, Object, String, ZookeeperAuthInfo)
+Change Method Signature;method;0.85;377-381;backtype.storm.utils.Utils.newCuratorStarted(Map, List, Object);390-394;backtype.storm.utils.Utils.newCuratorStarted(Map, List, Object, ZookeeperAuthInfo)
+Change Method Signature;method;0.81;320-322;backtype.storm.utils.Utils.newCurator(Map, List, Object, String);380-382;backtype.storm.utils.Utils.newCurator(Map, List, Object, ZookeeperAuthInfo)
+Extract Method;method;0.58;347-365;backtype.storm.utils.Utils.newCurator(Map, List, Object, String, ZookeeperAuthInfo);366-378;backtype.storm.utils.Utils.setupBuilder(CuratorFrameworkFactory.Builder, String, Map, ZookeeperAuthInfo)

@@ -1,0 +1,3669 @@
+package com.fasterxml.jackson.core.json;
+import java.io.*;
+import com.fasterxml.jackson.core.*;
+import com.fasterxml.jackson.core.exc.StreamReadException;
+import com.fasterxml.jackson.core.exc.WrappedIOException;
+import com.fasterxml.jackson.core.io.CharTypes;
+import com.fasterxml.jackson.core.io.IOContext;
+import com.fasterxml.jackson.core.sym.ByteQuadsCanonicalizer;
+import com.fasterxml.jackson.core.sym.PropertyNameMatcher;
+import com.fasterxml.jackson.core.util.*;
+import static com.fasterxml.jackson.core.JsonTokenId.*;
+
+/**
+ * This is a concrete implementation of {@link JsonParser}, which is
+ * based on a {@link java.io.InputStream} as the input source.
+ */
+public class UTF8StreamJsonParser extends JsonParserBase {
+  final static byte BYTE_LF = (byte) '\n';
+
+  private final static int FEAT_MASK_TRAILING_COMMA = JsonReadFeature.ALLOW_TRAILING_COMMA.getMask();
+
+  private final static int FEAT_MASK_ALLOW_MISSING = JsonReadFeature.ALLOW_MISSING_VALUES.getMask();
+
+  private final static int[] _icUTF8 = CharTypes.getInputCodeUtf8();
+
+  protected final static int[] _icLatin1 = CharTypes.getInputCodeLatin1();
+
+  /**
+     * Symbol table that contains property names encountered so far
+     */
+  protected final ByteQuadsCanonicalizer _symbols;
+
+  /**
+     * Temporary buffer used for name parsing.
+     */
+  protected int[] _quadBuffer = new int[16];
+
+  /**
+     * Flag that indicates that the current token has not yet
+     * been fully processed, and needs to be finished for
+     * some access (or skipped to obtain the next token)
+     */
+  protected boolean _tokenIncomplete;
+
+  /**
+     * Temporary storage for partially parsed name bytes.
+     */
+  private int _quad1;
+
+  /**
+     * Temporary input pointer
+     */
+  private int _quadPtr;
+
+  /**
+     * Value of {@link #_inputPtr} at the time when the first character of
+     * name token was read. Used for calculating token location when requested;
+     * combined with {@link #_currInputProcessed}, may be updated appropriately
+     * as needed.
+     */
+  protected int _nameStartOffset;
+
+  protected int _nameStartRow;
+
+  protected int _nameStartCol;
+
+  protected InputStream _inputStream;
+
+  /**
+     * Current buffer from which data is read; generally data is read into
+     * buffer from input source, but in some cases pre-loaded buffer
+     * is handed to the parser.
+     */
+  protected byte[] _inputBuffer;
+
+  /**
+     * Flag that indicates whether the input buffer is recycable (and
+     * needs to be returned to recycler once we are done) or not.
+     *<p>
+     * If it is not, it also means that parser can NOT modify underlying
+     * buffer.
+     */
+  protected boolean _bufferRecyclable;
+
+  /**
+     * Constructor called when caller wants to provide input buffer directly
+     * (or needs to, in case of bootstrapping having read some of contents)
+     * and it may or may not be recyclable use standard recycle context.
+     *
+     * @param readCtxt Object read context to use
+     * @param ctxt I/O context to use
+     * @param stdFeatures Standard stream read features enabled
+     * @param formatReadFeatures Format-specific read features enabled
+     * @param in InputStream used for reading actual content, if any; {@code null} if none
+     * @param sym Name canonicalizer to use
+     * @param inputBuffer Input buffer to read initial content from (before Reader)
+     * @param start Pointer in {@code inputBuffer} that has the first content character to decode
+     * @param end Pointer past the last content character in {@code inputBuffer}
+     * @param bytesPreProcessed Number of bytes that have been consumed already (by bootstrapping)
+     * @param bufferRecyclable Whether {@code inputBuffer} passed is managed by Jackson core
+     *    (and thereby needs recycling)
+     */
+  public UTF8StreamJsonParser(ObjectReadContext readCtxt, IOContext ctxt, int stdFeatures, int formatReadFeatures, InputStream in, ByteQuadsCanonicalizer sym, byte[] inputBuffer, int start, int end, int bytesPreProcessed, boolean bufferRecyclable) {
+    super(readCtxt, ctxt, stdFeatures, formatReadFeatures);
+    _inputStream = in;
+    _symbols = sym;
+    _inputBuffer = inputBuffer;
+    _inputPtr = start;
+    _inputEnd = end;
+    _currInputRowStart = start - bytesPreProcessed;
+    _currInputProcessed = -start + bytesPreProcessed;
+    _bufferRecyclable = bufferRecyclable;
+  }
+
+  @Override public int releaseBuffered(OutputStream out) throws JacksonException {
+    int count = _inputEnd - _inputPtr;
+    if (count < 1) {
+      return 0;
+    }
+    int origPtr = _inputPtr;
+    _inputPtr += count;
+    try {
+      out.write(_inputBuffer, origPtr, count);
+    } catch (IOException e) {
+      throw _wrapIOFailure(e);
+    }
+    return count;
+  }
+
+  @Override public Object streamReadInputSource() {
+    return _inputStream;
+  }
+
+  protected final boolean _loadMore() throws JacksonException {
+    if (_inputStream != null) {
+      int space = _inputBuffer.length;
+      if (space == 0) {
+        return false;
+      }
+      int count;
+      try {
+        count = _inputStream.read(_inputBuffer, 0, space);
+      } catch (IOException e) {
+        throw _wrapIOFailure(e);
+      }
+      if (count > 0) {
+        final int bufSize = _inputEnd;
+        _currInputProcessed += bufSize;
+        _currInputRowStart -= bufSize;
+        _nameStartOffset -= bufSize;
+        _inputPtr = 0;
+        _inputEnd = count;
+        return true;
+      }
+      _closeInput();
+      if (count == 0) {
+        _reportBadInputStream(_inputBuffer.length);
+      }
+    }
+    return false;
+  }
+
+  @Override protected void _closeInput() {
+    if (_inputStream != null) {
+      if (_ioContext.isResourceManaged() || isEnabled(StreamReadFeature.AUTO_CLOSE_SOURCE)) {
+        try {
+          _inputStream.close();
+        } catch (IOException e) {
+          throw _wrapIOFailure(e);
+        }
+      }
+      _inputStream = null;
+    }
+  }
+
+  /**
+     * Method called to release internal buffers owned by the base
+     * reader. This may be called along with {@link #_closeInput} (for
+     * example, when explicitly closing this reader instance), or
+     * separately (if need be).
+     */
+  @Override protected void _releaseBuffers() {
+    super._releaseBuffers();
+    _symbols.release();
+    if (_bufferRecyclable) {
+      byte[] buf = _inputBuffer;
+      if (buf != null) {
+        if (buf != NO_BYTES) {
+          _inputBuffer = NO_BYTES;
+          _ioContext.releaseReadIOBuffer(buf);
+        }
+      }
+    }
+  }
+
+  @Override public String getText() throws JacksonException {
+    if (_currToken == JsonToken.VALUE_STRING) {
+      if (_tokenIncomplete) {
+        _tokenIncomplete = false;
+        return _finishAndReturnString();
+      }
+      return _textBuffer.contentsAsString();
+    }
+    return _getText2(_currToken);
+  }
+
+  @Override public int getText(Writer writer) throws JacksonException {
+    try {
+      JsonToken t = _currToken;
+      if (t == JsonToken.VALUE_STRING) {
+        if (_tokenIncomplete) {
+          _tokenIncomplete = false;
+          _finishString();
+        }
+        return _textBuffer.contentsToWriter(writer);
+      }
+      if (t == JsonToken.PROPERTY_NAME) {
+        String n = _streamReadContext.currentName();
+        writer.write(n);
+        return n.length();
+      }
+      if (t != null) {
+        if (t.isNumeric()) {
+          return _textBuffer.contentsToWriter(writer);
+        }
+        char[] ch = t.asCharArray();
+        writer.write(ch);
+        return ch.length;
+      }
+    } catch (IOException e) {
+      throw _wrapIOFailure(e);
+    }
+    return 0;
+  }
+
+  @Override public String getValueAsString() throws JacksonException {
+    if (_currToken == JsonToken.VALUE_STRING) {
+      if (_tokenIncomplete) {
+        _tokenIncomplete = false;
+        return _finishAndReturnString();
+      }
+      return _textBuffer.contentsAsString();
+    }
+    if (_currToken == JsonToken.PROPERTY_NAME) {
+      return currentName();
+    }
+    return super.getValueAsString(null);
+  }
+
+  @Override public String getValueAsString(String defValue) throws JacksonException {
+    if (_currToken == JsonToken.VALUE_STRING) {
+      if (_tokenIncomplete) {
+        _tokenIncomplete = false;
+        return _finishAndReturnString();
+      }
+      return _textBuffer.contentsAsString();
+    }
+    if (_currToken == JsonToken.PROPERTY_NAME) {
+      return currentName();
+    }
+    return super.getValueAsString(defValue);
+  }
+
+  @Override public int getValueAsInt() throws JacksonException {
+    JsonToken t = _currToken;
+    if ((t == JsonToken.VALUE_NUMBER_INT) || (t == JsonToken.VALUE_NUMBER_FLOAT)) {
+      if ((_numTypesValid & NR_INT) == 0) {
+        if (_numTypesValid == NR_UNKNOWN) {
+          return _parseIntValue();
+        }
+        if ((_numTypesValid & NR_INT) == 0) {
+          convertNumberToInt();
+        }
+      }
+      return _numberInt;
+    }
+    return super.getValueAsInt(0);
+  }
+
+  @Override public int getValueAsInt(int defValue) throws JacksonException {
+    JsonToken t = _currToken;
+    if ((t == JsonToken.VALUE_NUMBER_INT) || (t == JsonToken.VALUE_NUMBER_FLOAT)) {
+      if ((_numTypesValid & NR_INT) == 0) {
+        if (_numTypesValid == NR_UNKNOWN) {
+          return _parseIntValue();
+        }
+        if ((_numTypesValid & NR_INT) == 0) {
+          convertNumberToInt();
+        }
+      }
+      return _numberInt;
+    }
+    return super.getValueAsInt(defValue);
+  }
+
+  protected final String _getText2(JsonToken t) {
+    if (t == null) {
+      return null;
+    }
+    switch (t.id()) {
+      case ID_PROPERTY_NAME:
+      return _streamReadContext.currentName();
+      case ID_STRING:
+      case ID_NUMBER_INT:
+      case ID_NUMBER_FLOAT:
+      return _textBuffer.contentsAsString();
+      default:
+      return t.asString();
+    }
+  }
+
+  @Override public char[] getTextCharacters() throws JacksonException {
+    if (_currToken != null) {
+      switch (_currToken.id()) {
+        case ID_PROPERTY_NAME:
+        return currentNameInBuffer();
+        case ID_STRING:
+        if (_tokenIncomplete) {
+          _tokenIncomplete = false;
+          _finishString();
+        }
+        case ID_NUMBER_INT:
+        case ID_NUMBER_FLOAT:
+        return _textBuffer.getTextBuffer();
+        default:
+        return _currToken.asCharArray();
+      }
+    }
+    return null;
+  }
+
+  @Override public int getTextLength() throws JacksonException {
+    if (_currToken != null) {
+      switch (_currToken.id()) {
+        case ID_PROPERTY_NAME:
+        return _streamReadContext.currentName().length();
+        case ID_STRING:
+        if (_tokenIncomplete) {
+          _tokenIncomplete = false;
+          _finishString();
+        }
+        case ID_NUMBER_INT:
+        case ID_NUMBER_FLOAT:
+        return _textBuffer.size();
+        default:
+        return _currToken.asCharArray().length;
+      }
+    }
+    return 0;
+  }
+
+  @Override public int getTextOffset() throws JacksonException {
+    if (_currToken != null) {
+      switch (_currToken.id()) {
+        case ID_PROPERTY_NAME:
+        return 0;
+        case ID_STRING:
+        if (_tokenIncomplete) {
+          _tokenIncomplete = false;
+          _finishString();
+        }
+        case ID_NUMBER_INT:
+        case ID_NUMBER_FLOAT:
+        return _textBuffer.getTextOffset();
+        default:
+      }
+    }
+    return 0;
+  }
+
+  @Override public byte[] getBinaryValue(Base64Variant b64variant) throws JacksonException {
+    if (_currToken != JsonToken.VALUE_STRING && (_currToken != JsonToken.VALUE_EMBEDDED_OBJECT || _binaryValue == null)) {
+      _reportError("Current token (" + _currToken + ") not VALUE_STRING or VALUE_EMBEDDED_OBJECT, can not access as binary");
+    }
+    if (_tokenIncomplete) {
+      try {
+        _binaryValue = _decodeBase64(b64variant);
+      } catch (IllegalArgumentException iae) {
+        throw _constructReadException("Failed to decode VALUE_STRING as base64 (" + b64variant + "): " + iae.getMessage());
+      }
+      _tokenIncomplete = false;
+    } else {
+      if (_binaryValue == null) {
+        @SuppressWarnings(value = { "resource" }) ByteArrayBuilder builder = _getByteArrayBuilder();
+        _decodeBase64(getText(), builder, b64variant);
+        _binaryValue = builder.toByteArray();
+      }
+    }
+    return _binaryValue;
+  }
+
+  @Override public int readBinaryValue(Base64Variant b64variant, OutputStream out) throws JacksonException {
+    if (!_tokenIncomplete || _currToken != JsonToken.VALUE_STRING) {
+      byte[] b = getBinaryValue(b64variant);
+      try {
+        out.write(b);
+      } catch (IOException e) {
+        throw _wrapIOFailure(e);
+      }
+      return b.length;
+    }
+    byte[] buf = _ioContext.allocBase64Buffer();
+    try {
+      return _readBinary(b64variant, out, buf);
+    } catch (IOException e) {
+      throw _wrapIOFailure(e);
+    } finally {
+      _ioContext.releaseBase64Buffer(buf);
+    }
+  }
+
+  protected int _readBinary(Base64Variant b64variant, OutputStream out, byte[] buffer) throws IOException {
+    int outputPtr = 0;
+    final int outputEnd = buffer.length - 3;
+    int outputCount = 0;
+    while (true) {
+      int ch;
+      do {
+        if (_inputPtr >= _inputEnd) {
+          _loadMoreGuaranteed();
+        }
+        ch = (int) _inputBuffer[_inputPtr++] & 0xFF;
+      } while(ch <= INT_SPACE);
+      int bits = b64variant.decodeBase64Char(ch);
+      if (bits < 0) {
+        if (ch == INT_QUOTE) {
+          break;
+        }
+        bits = _decodeBase64Escape(b64variant, ch, 0);
+        if (bits < 0) {
+          continue;
+        }
+      }
+      if (outputPtr > outputEnd) {
+        outputCount += outputPtr;
+        out.write(buffer, 0, outputPtr);
+        outputPtr = 0;
+      }
+      int decodedData = bits;
+      if (_inputPtr >= _inputEnd) {
+        _loadMoreGuaranteed();
+      }
+      ch = _inputBuffer[_inputPtr++] & 0xFF;
+      bits = b64variant.decodeBase64Char(ch);
+      if (bits < 0) {
+        bits = _decodeBase64Escape(b64variant, ch, 1);
+      }
+      decodedData = (decodedData << 6) | bits;
+      if (_inputPtr >= _inputEnd) {
+        _loadMoreGuaranteed();
+      }
+      ch = _inputBuffer[_inputPtr++] & 0xFF;
+      bits = b64variant.decodeBase64Char(ch);
+      if (bits < 0) {
+        if (bits != Base64Variant.BASE64_VALUE_PADDING) {
+          if (ch == INT_QUOTE) {
+            decodedData >>= 4;
+            buffer[outputPtr++] = (byte) decodedData;
+            if (b64variant.usesPadding()) {
+              --_inputPtr;
+              _handleBase64MissingPadding(b64variant);
+            }
+            break;
+          }
+          bits = _decodeBase64Escape(b64variant, ch, 2);
+        }
+        if (bits == Base64Variant.BASE64_VALUE_PADDING) {
+          if (_inputPtr >= _inputEnd) {
+            _loadMoreGuaranteed();
+          }
+          ch = _inputBuffer[_inputPtr++] & 0xFF;
+          if (!b64variant.usesPaddingChar(ch)) {
+            if (_decodeBase64Escape(b64variant, ch, 3) != Base64Variant.BASE64_VALUE_PADDING) {
+              _reportInvalidBase64Char(b64variant, ch, 3, "expected padding character \'" + b64variant.getPaddingChar() + "\'");
+            }
+          }
+          decodedData >>= 4;
+          buffer[outputPtr++] = (byte) decodedData;
+          continue;
+        }
+      }
+      decodedData = (decodedData << 6) | bits;
+      if (_inputPtr >= _inputEnd) {
+        _loadMoreGuaranteed();
+      }
+      ch = _inputBuffer[_inputPtr++] & 0xFF;
+      bits = b64variant.decodeBase64Char(ch);
+      if (bits < 0) {
+        if (bits != Base64Variant.BASE64_VALUE_PADDING) {
+          if (ch == INT_QUOTE) {
+            decodedData >>= 2;
+            buffer[outputPtr++] = (byte) (decodedData >> 8);
+            buffer[outputPtr++] = (byte) decodedData;
+            if (b64variant.usesPadding()) {
+              --_inputPtr;
+              _handleBase64MissingPadding(b64variant);
+            }
+            break;
+          }
+          bits = _decodeBase64Escape(b64variant, ch, 3);
+        }
+        if (bits == Base64Variant.BASE64_VALUE_PADDING) {
+          decodedData >>= 2;
+          buffer[outputPtr++] = (byte) (decodedData >> 8);
+          buffer[outputPtr++] = (byte) decodedData;
+          continue;
+        }
+      }
+      decodedData = (decodedData << 6) | bits;
+      buffer[outputPtr++] = (byte) (decodedData >> 16);
+      buffer[outputPtr++] = (byte) (decodedData >> 8);
+      buffer[outputPtr++] = (byte) decodedData;
+    }
+    _tokenIncomplete = false;
+    if (outputPtr > 0) {
+      outputCount += outputPtr;
+      out.write(buffer, 0, outputPtr);
+    }
+    return outputCount;
+  }
+
+  /**
+     * @return Next token from the stream, if any found, or null
+     *   to indicate end-of-input
+     */
+  @Override public JsonToken nextToken() throws JacksonException {
+    if (_currToken == JsonToken.PROPERTY_NAME) {
+      return _nextAfterName();
+    }
+    _numTypesValid = NR_UNKNOWN;
+    if (_tokenIncomplete) {
+      _skipString();
+    }
+    int i = _skipWSOrEnd();
+    if (i < 0) {
+      close();
+      return (_currToken = null);
+    }
+    _binaryValue = null;
+    if (i == INT_RBRACKET) {
+      _closeArrayScope();
+      return (_currToken = JsonToken.END_ARRAY);
+    }
+    if (i == INT_RCURLY) {
+      _closeObjectScope();
+      return (_currToken = JsonToken.END_OBJECT);
+    }
+    if (_streamReadContext.expectComma()) {
+      if (i != INT_COMMA) {
+        _reportUnexpectedChar(i, "was expecting comma to separate " + _streamReadContext.typeDesc() + " entries");
+      }
+      i = _skipWS();
+      if ((_formatReadFeatures & FEAT_MASK_TRAILING_COMMA) != 0) {
+        if ((i == INT_RBRACKET) || (i == INT_RCURLY)) {
+          return _closeScope(i);
+        }
+      }
+    }
+    if (!_streamReadContext.inObject()) {
+      _updateLocation();
+      return _nextTokenNotInObject(i);
+    }
+    _updateNameLocation();
+    String n = _parseName(i);
+    _streamReadContext.setCurrentName(n);
+    _currToken = JsonToken.PROPERTY_NAME;
+    i = _skipColon();
+    _updateLocation();
+    if (i == INT_QUOTE) {
+      _tokenIncomplete = true;
+      _nextToken = JsonToken.VALUE_STRING;
+      return _currToken;
+    }
+    JsonToken t;
+    switch (i) {
+      case '-':
+      t = _parseSignedNumber(true);
+      break;
+      case '+':
+      if (isEnabled(JsonReadFeature.ALLOW_LEADING_PLUS_SIGN_FOR_NUMBERS)) {
+        t = _parseSignedNumber(false);
+      } else {
+        t = _handleUnexpectedValue(i);
+      }
+      break;
+      case '.':
+      t = _parseFloatThatStartsWithPeriod();
+      break;
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      t = _parsePosNumber(i);
+      break;
+      case 'f':
+      _matchFalse();
+      t = JsonToken.VALUE_FALSE;
+      break;
+      case 'n':
+      _matchNull();
+      t = JsonToken.VALUE_NULL;
+      break;
+      case 't':
+      _matchTrue();
+      t = JsonToken.VALUE_TRUE;
+      break;
+      case '[':
+      t = JsonToken.START_ARRAY;
+      break;
+      case '{':
+      t = JsonToken.START_OBJECT;
+      break;
+      default:
+      t = _handleUnexpectedValue(i);
+    }
+    _nextToken = t;
+    return _currToken;
+  }
+
+  private final JsonToken _nextTokenNotInObject(int i) throws JacksonException {
+    if (i == INT_QUOTE) {
+      _tokenIncomplete = true;
+      return (_currToken = JsonToken.VALUE_STRING);
+    }
+    switch (i) {
+      case '[':
+      _streamReadContext = _streamReadContext.createChildArrayContext(_tokenInputRow, _tokenInputCol);
+      return (_currToken = JsonToken.START_ARRAY);
+      case '{':
+      _streamReadContext = _streamReadContext.createChildObjectContext(_tokenInputRow, _tokenInputCol);
+      return (_currToken = JsonToken.START_OBJECT);
+      case 't':
+      _matchTrue();
+      return (_currToken = JsonToken.VALUE_TRUE);
+      case 'f':
+      _matchFalse();
+      return (_currToken = JsonToken.VALUE_FALSE);
+      case 'n':
+      _matchNull();
+      return (_currToken = JsonToken.VALUE_NULL);
+      case '-':
+      return (_currToken = _parseSignedNumber(true));
+      case '+':
+      if (!isEnabled(JsonReadFeature.ALLOW_LEADING_PLUS_SIGN_FOR_NUMBERS)) {
+        return (_currToken = _handleUnexpectedValue(i));
+      }
+      return (_currToken = _parseSignedNumber(false));
+      case '.':
+      return (_currToken = _parseFloatThatStartsWithPeriod());
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      return (_currToken = _parsePosNumber(i));
+    }
+    return (_currToken = _handleUnexpectedValue(i));
+  }
+
+  private final JsonToken _nextAfterName() {
+    _nameCopied = false;
+    JsonToken t = _nextToken;
+    _nextToken = null;
+    if (t == JsonToken.START_ARRAY) {
+      _streamReadContext = _streamReadContext.createChildArrayContext(_tokenInputRow, _tokenInputCol);
+    } else {
+      if (t == JsonToken.START_OBJECT) {
+        _streamReadContext = _streamReadContext.createChildObjectContext(_tokenInputRow, _tokenInputCol);
+      }
+    }
+    return (_currToken = t);
+  }
+
+  @Override public void finishToken() throws JacksonException {
+    if (_tokenIncomplete) {
+      _tokenIncomplete = false;
+      _finishString();
+    }
+  }
+
+  @Override public String nextName() throws JacksonException {
+    _numTypesValid = NR_UNKNOWN;
+    if (_currToken == JsonToken.PROPERTY_NAME) {
+      _nextAfterName();
+      return null;
+    }
+    if (_tokenIncomplete) {
+      _skipString();
+    }
+    int i = _skipWSOrEnd();
+    if (i < 0) {
+      close();
+      _currToken = null;
+      return null;
+    }
+    _binaryValue = null;
+    if (i == INT_RBRACKET) {
+      _closeArrayScope();
+      _currToken = JsonToken.END_ARRAY;
+      return null;
+    }
+    if (i == INT_RCURLY) {
+      _closeObjectScope();
+      _currToken = JsonToken.END_OBJECT;
+      return null;
+    }
+    if (_streamReadContext.expectComma()) {
+      if (i != INT_COMMA) {
+        _reportUnexpectedChar(i, "was expecting comma to separate " + _streamReadContext.typeDesc() + " entries");
+      }
+      i = _skipWS();
+      if ((_formatReadFeatures & FEAT_MASK_TRAILING_COMMA) != 0) {
+        if ((i == INT_RBRACKET) || (i == INT_RCURLY)) {
+          _closeScope(i);
+          return null;
+        }
+      }
+    }
+    if (!_streamReadContext.inObject()) {
+      _updateLocation();
+      _nextTokenNotInObject(i);
+      return null;
+    }
+    _updateNameLocation();
+    final String nameStr = _parseName(i);
+    _streamReadContext.setCurrentName(nameStr);
+    _currToken = JsonToken.PROPERTY_NAME;
+    i = _skipColon();
+    _updateLocation();
+    if (i == INT_QUOTE) {
+      _tokenIncomplete = true;
+      _nextToken = JsonToken.VALUE_STRING;
+      return nameStr;
+    }
+    JsonToken t;
+    switch (i) {
+      case '-':
+      t = _parsePossibleNumber(true);
+      break;
+      case '+':
+      if (isEnabled(JsonReadFeature.ALLOW_LEADING_PLUS_SIGN_FOR_NUMBERS)) {
+        t = _parsePossibleNumber(false);
+      } else {
+        t = _handleUnexpectedValue(i);
+      }
+      break;
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      t = _parsePosNumber(i);
+      break;
+      case 'f':
+      _matchFalse();
+      t = JsonToken.VALUE_FALSE;
+      break;
+      case 'n':
+      _matchNull();
+      t = JsonToken.VALUE_NULL;
+      break;
+      case 't':
+      _matchTrue();
+      t = JsonToken.VALUE_TRUE;
+      break;
+      case '[':
+      t = JsonToken.START_ARRAY;
+      break;
+      case '{':
+      t = JsonToken.START_OBJECT;
+      break;
+      default:
+      t = _handleUnexpectedValue(i);
+    }
+    _nextToken = t;
+    return nameStr;
+  }
+
+  @Override public boolean nextName(SerializableString str) throws JacksonException {
+    _numTypesValid = NR_UNKNOWN;
+    if (_currToken == JsonToken.PROPERTY_NAME) {
+      _nextAfterName();
+      return false;
+    }
+    if (_tokenIncomplete) {
+      _skipString();
+    }
+    int i = _skipWSOrEnd();
+    if (i < 0) {
+      close();
+      _currToken = null;
+      return false;
+    }
+    _binaryValue = null;
+    if (i == INT_RBRACKET) {
+      _closeArrayScope();
+      _currToken = JsonToken.END_ARRAY;
+      return false;
+    }
+    if (i == INT_RCURLY) {
+      _closeObjectScope();
+      _currToken = JsonToken.END_OBJECT;
+      return false;
+    }
+    if (_streamReadContext.expectComma()) {
+      if (i != INT_COMMA) {
+        _reportUnexpectedChar(i, "was expecting comma to separate " + _streamReadContext.typeDesc() + " entries");
+      }
+      i = _skipWS();
+      if ((_formatReadFeatures & FEAT_MASK_TRAILING_COMMA) != 0) {
+        if ((i == INT_RBRACKET) || (i == INT_RCURLY)) {
+          _closeScope(i);
+          return false;
+        }
+      }
+    }
+    if (!_streamReadContext.inObject()) {
+      _updateLocation();
+      _nextTokenNotInObject(i);
+      return false;
+    }
+    _updateNameLocation();
+    if (i == INT_QUOTE) {
+      byte[] nameBytes = str.asQuotedUTF8();
+      final int len = nameBytes.length;
+      if ((_inputPtr + len + 4) < _inputEnd) {
+        final int end = _inputPtr + len;
+        if (_inputBuffer[end] == INT_QUOTE) {
+          int offset = 0;
+          int ptr = _inputPtr;
+          while (true) {
+            if (ptr == end) {
+              _streamReadContext.setCurrentName(str.getValue());
+              i = _skipColonFast(ptr + 1);
+              _isNextTokenNameYes(i);
+              return true;
+            }
+            if (nameBytes[offset] != _inputBuffer[ptr]) {
+              break;
+            }
+            ++offset;
+            ++ptr;
+          }
+        }
+      }
+    }
+    return _isNextTokenNameMaybe(i, str);
+  }
+
+  @Override public int nextNameMatch(PropertyNameMatcher matcher) throws JacksonException {
+    _numTypesValid = NR_UNKNOWN;
+    if (_currToken == JsonToken.PROPERTY_NAME) {
+      _nextAfterName();
+      return PropertyNameMatcher.MATCH_ODD_TOKEN;
+    }
+    if (_tokenIncomplete) {
+      _skipString();
+    }
+    int i = _skipWSOrEnd();
+    if (i < 0) {
+      close();
+      _currToken = null;
+      return PropertyNameMatcher.MATCH_ODD_TOKEN;
+    }
+    _binaryValue = null;
+    if (i == INT_RBRACKET) {
+      _closeArrayScope();
+      _currToken = JsonToken.END_ARRAY;
+      return PropertyNameMatcher.MATCH_ODD_TOKEN;
+    }
+    if (i == INT_RCURLY) {
+      _closeObjectScope();
+      _currToken = JsonToken.END_OBJECT;
+      return PropertyNameMatcher.MATCH_END_OBJECT;
+    }
+    if (_streamReadContext.expectComma()) {
+      if (i != INT_COMMA) {
+        _reportUnexpectedChar(i, "was expecting comma to separate " + _streamReadContext.typeDesc() + " entries");
+      }
+      i = _skipWS();
+      if ((_formatReadFeatures & FEAT_MASK_TRAILING_COMMA) != 0) {
+        boolean isEndObject = (i == INT_RCURLY);
+        if (isEndObject || (i == INT_RBRACKET)) {
+          _closeScope(i);
+          return isEndObject ? PropertyNameMatcher.MATCH_END_OBJECT : PropertyNameMatcher.MATCH_ODD_TOKEN;
+        }
+      }
+    }
+    if (!_streamReadContext.inObject()) {
+      _updateLocation();
+      _nextTokenNotInObject(i);
+      return PropertyNameMatcher.MATCH_ODD_TOKEN;
+    }
+    _updateNameLocation();
+    String name;
+    int match = _matchName(matcher, i);
+    if (match >= 0) {
+      _inputPtr = _quadPtr;
+      name = matcher.nameLookup()[match];
+    } else {
+      name = _parseName(i);
+      match = matcher.matchName(name);
+    }
+    _streamReadContext.setCurrentName(name);
+    _currToken = JsonToken.PROPERTY_NAME;
+    i = _skipColon();
+    _updateLocation();
+    if (i == INT_QUOTE) {
+      _tokenIncomplete = true;
+      _nextToken = JsonToken.VALUE_STRING;
+      return match;
+    }
+    JsonToken t;
+    switch (i) {
+      case '-':
+      t = _parsePossibleNumber(true);
+      break;
+      case '+':
+      if (isEnabled(JsonReadFeature.ALLOW_LEADING_PLUS_SIGN_FOR_NUMBERS)) {
+        t = _parsePossibleNumber(false);
+      } else {
+        t = _handleUnexpectedValue(i);
+      }
+      break;
+      case '.':
+      t = _parseFloatThatStartsWithPeriod();
+      break;
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      t = _parsePosNumber(i);
+      break;
+      case 'f':
+      _matchFalse();
+      t = JsonToken.VALUE_FALSE;
+      break;
+      case 'n':
+      _matchNull();
+      t = JsonToken.VALUE_NULL;
+      break;
+      case 't':
+      _matchTrue();
+      t = JsonToken.VALUE_TRUE;
+      break;
+      case '[':
+      t = JsonToken.START_ARRAY;
+      break;
+      case '{':
+      t = JsonToken.START_OBJECT;
+      break;
+      default:
+      t = _handleUnexpectedValue(i);
+    }
+    _nextToken = t;
+    return match;
+  }
+
+  private final int _skipColonFast(int ptr) throws JacksonException {
+    int i = _inputBuffer[ptr++];
+    if (i == INT_COLON) {
+      i = _inputBuffer[ptr++];
+      if (i > INT_SPACE) {
+        if (i != INT_SLASH && i != INT_HASH) {
+          _inputPtr = ptr;
+          return i;
+        }
+      } else {
+        if (i == INT_SPACE || i == INT_TAB) {
+          i = (int) _inputBuffer[ptr++];
+          if (i > INT_SPACE) {
+            if (i != INT_SLASH && i != INT_HASH) {
+              _inputPtr = ptr;
+              return i;
+            }
+          }
+        }
+      }
+      _inputPtr = ptr - 1;
+      return _skipColon2(true);
+    }
+    if (i == INT_SPACE || i == INT_TAB) {
+      i = _inputBuffer[ptr++];
+    }
+    if (i == INT_COLON) {
+      i = _inputBuffer[ptr++];
+      if (i > INT_SPACE) {
+        if (i != INT_SLASH && i != INT_HASH) {
+          _inputPtr = ptr;
+          return i;
+        }
+      } else {
+        if (i == INT_SPACE || i == INT_TAB) {
+          i = (int) _inputBuffer[ptr++];
+          if (i > INT_SPACE) {
+            if (i != INT_SLASH && i != INT_HASH) {
+              _inputPtr = ptr;
+              return i;
+            }
+          }
+        }
+      }
+      _inputPtr = ptr - 1;
+      return _skipColon2(true);
+    }
+    _inputPtr = ptr - 1;
+    return _skipColon2(false);
+  }
+
+  private final void _isNextTokenNameYes(int i) throws JacksonException {
+    _currToken = JsonToken.PROPERTY_NAME;
+    _updateLocation();
+    switch (i) {
+      case '\"':
+      _tokenIncomplete = true;
+      _nextToken = JsonToken.VALUE_STRING;
+      return;
+      case '[':
+      _nextToken = JsonToken.START_ARRAY;
+      return;
+      case '{':
+      _nextToken = JsonToken.START_OBJECT;
+      return;
+      case 't':
+      _matchTrue();
+      _nextToken = JsonToken.VALUE_TRUE;
+      return;
+      case 'f':
+      _matchFalse();
+      _nextToken = JsonToken.VALUE_FALSE;
+      return;
+      case 'n':
+      _matchNull();
+      _nextToken = JsonToken.VALUE_NULL;
+      return;
+      case '-':
+      _nextToken = _parseSignedNumber(true);
+      return;
+      case '+':
+      if (isEnabled(JsonReadFeature.ALLOW_LEADING_PLUS_SIGN_FOR_NUMBERS)) {
+        _nextToken = _parseSignedNumber(false);
+      } else {
+        _nextToken = _handleUnexpectedValue(i);
+      }
+      return;
+      case '.':
+      _nextToken = _parseFloatThatStartsWithPeriod();
+      return;
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      _nextToken = _parsePosNumber(i);
+      return;
+    }
+    _nextToken = _handleUnexpectedValue(i);
+  }
+
+  private final boolean _isNextTokenNameMaybe(int i, SerializableString str) throws JacksonException {
+    String n = _parseName(i);
+    _streamReadContext.setCurrentName(n);
+    final boolean match = n.equals(str.getValue());
+    _currToken = JsonToken.PROPERTY_NAME;
+    i = _skipColon();
+    _updateLocation();
+    if (i == INT_QUOTE) {
+      _tokenIncomplete = true;
+      _nextToken = JsonToken.VALUE_STRING;
+      return match;
+    }
+    JsonToken t;
+    switch (i) {
+      case '[':
+      t = JsonToken.START_ARRAY;
+      break;
+      case '{':
+      t = JsonToken.START_OBJECT;
+      break;
+      case 't':
+      _matchTrue();
+      t = JsonToken.VALUE_TRUE;
+      break;
+      case 'f':
+      _matchFalse();
+      t = JsonToken.VALUE_FALSE;
+      break;
+      case 'n':
+      _matchNull();
+      t = JsonToken.VALUE_NULL;
+      break;
+      case '-':
+      t = _parseSignedNumber(true);
+      break;
+      case '+':
+      if (isEnabled(JsonReadFeature.ALLOW_LEADING_PLUS_SIGN_FOR_NUMBERS)) {
+        t = _parseSignedNumber(false);
+      } else {
+        t = _handleUnexpectedValue(i);
+      }
+      break;
+      case '.':
+      t = _parseFloatThatStartsWithPeriod();
+      break;
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      t = _parsePosNumber(i);
+      break;
+      default:
+      t = _handleUnexpectedValue(i);
+    }
+    _nextToken = t;
+    return match;
+  }
+
+  protected final int _matchName(PropertyNameMatcher matcher, int i) throws JacksonException {
+    if (i != INT_QUOTE) {
+      return -1;
+    }
+    int qptr = _inputPtr;
+    if ((qptr + 13) > _inputEnd) {
+      return -1;
+    }
+    final byte[] input = _inputBuffer;
+    final int[] codes = _icLatin1;
+    int q = input[qptr++] & 0xFF;
+    if (codes[q] != 0) {
+      if (q == INT_QUOTE) {
+        return matcher.matchName("");
+      }
+      return -1;
+    }
+    i = input[qptr++] & 0xFF;
+    if (codes[i] != 0) {
+      if (i != INT_QUOTE) {
+        return -1;
+      }
+    } else {
+      q = (q << 8) | i;
+      i = input[qptr++] & 0xFF;
+      if (codes[i] != 0) {
+        if (i != INT_QUOTE) {
+          return -1;
+        }
+      } else {
+        q = (q << 8) | i;
+        i = input[qptr++] & 0xFF;
+        if (codes[i] != 0) {
+          if (i != INT_QUOTE) {
+            return -1;
+          }
+        } else {
+          q = (q << 8) | i;
+          i = input[qptr++] & 0xFF;
+          if (codes[i] == 0) {
+            _quad1 = q;
+            return _matchMediumName(matcher, qptr, i);
+          }
+          if (i != INT_QUOTE) {
+            return -1;
+          }
+        }
+      }
+    }
+    _quadPtr = qptr;
+    return matcher.matchByQuad(q);
+  }
+
+  protected final int _matchMediumName(PropertyNameMatcher matcher, int qptr, int q2) throws JacksonException {
+    final byte[] input = _inputBuffer;
+    final int[] codes = _icLatin1;
+    int i = input[qptr++] & 0xFF;
+    if (codes[i] != 0) {
+      if (i != INT_QUOTE) {
+        return -1;
+      }
+    } else {
+      q2 = (q2 << 8) | i;
+      i = input[qptr++] & 0xFF;
+      if (codes[i] != 0) {
+        if (i != INT_QUOTE) {
+          return -1;
+        }
+      } else {
+        q2 = (q2 << 8) | i;
+        i = input[qptr++] & 0xFF;
+        if (codes[i] != 0) {
+          if (i != INT_QUOTE) {
+            return -1;
+          }
+        } else {
+          q2 = (q2 << 8) | i;
+          i = input[qptr++] & 0xFF;
+          if (codes[i] == 0) {
+            return _matchMediumName2(matcher, qptr, i, q2);
+          }
+          if (i != INT_QUOTE) {
+            return -1;
+          }
+        }
+      }
+    }
+    _quadPtr = qptr;
+    return matcher.matchByQuad(_quad1, q2);
+  }
+
+  protected final int _matchMediumName2(PropertyNameMatcher matcher, int qptr, int q3, final int q2) throws JacksonException {
+    final byte[] input = _inputBuffer;
+    final int[] codes = _icLatin1;
+    int i = input[qptr++] & 0xFF;
+    if (codes[i] != 0) {
+      if (i != INT_QUOTE) {
+        return -1;
+      }
+    } else {
+      q3 = (q3 << 8) | i;
+      i = input[qptr++] & 0xFF;
+      if (codes[i] != 0) {
+        if (i != INT_QUOTE) {
+          return -1;
+        }
+      } else {
+        q3 = (q3 << 8) | i;
+        i = input[qptr++] & 0xFF;
+        if (codes[i] != 0) {
+          if (i != INT_QUOTE) {
+            return -1;
+          }
+        } else {
+          q3 = (q3 << 8) | i;
+          i = input[qptr++] & 0xFF;
+          if (codes[i] == 0) {
+            _quadBuffer[0] = _quad1;
+            _quadBuffer[1] = q2;
+            _quadBuffer[2] = q3;
+            return _matchLongName(matcher, qptr, i);
+          }
+          if (i != INT_QUOTE) {
+            return -1;
+          }
+        }
+      }
+    }
+    _quadPtr = qptr;
+    return matcher.matchByQuad(_quad1, q2, q3);
+  }
+
+  protected final int _matchLongName(PropertyNameMatcher matcher, int qptr, int q) throws JacksonException {
+    final byte[] input = _inputBuffer;
+    final int[] codes = _icLatin1;
+    int qlen = 3;
+    while ((qptr + 4) <= _inputEnd) {
+      int i = input[qptr++] & 0xFF;
+      if (codes[i] != 0) {
+        if (i != INT_QUOTE) {
+          return -1;
+        }
+        _quadPtr = qptr;
+        return matcher.matchByQuad(_quadBuffer, qlen);
+      }
+      q = (q << 8) | i;
+      i = input[qptr++] & 0xFF;
+      if (codes[i] != 0) {
+        if (i != INT_QUOTE) {
+          return -1;
+        }
+        break;
+      }
+      q = (q << 8) | i;
+      i = input[qptr++] & 0xFF;
+      if (codes[i] != 0) {
+        if (i != INT_QUOTE) {
+          return -1;
+        }
+        break;
+      }
+      q = (q << 8) | i;
+      i = input[qptr++] & 0xFF;
+      if (codes[i] != 0) {
+        if (i != INT_QUOTE) {
+          return -1;
+        }
+        break;
+      }
+      if (qlen >= _quadBuffer.length) {
+        _quadBuffer = growArrayBy(_quadBuffer, qlen);
+      }
+      _quadBuffer[qlen++] = q;
+      q = i;
+    }
+    return -1;
+  }
+
+  @Override public String nextTextValue() throws JacksonException {
+    if (_currToken == JsonToken.PROPERTY_NAME) {
+      _nameCopied = false;
+      JsonToken t = _nextToken;
+      _nextToken = null;
+      _currToken = t;
+      if (t == JsonToken.VALUE_STRING) {
+        if (_tokenIncomplete) {
+          _tokenIncomplete = false;
+          return _finishAndReturnString();
+        }
+        return _textBuffer.contentsAsString();
+      }
+      if (t == JsonToken.START_ARRAY) {
+        _streamReadContext = _streamReadContext.createChildArrayContext(_tokenInputRow, _tokenInputCol);
+      } else {
+        if (t == JsonToken.START_OBJECT) {
+          _streamReadContext = _streamReadContext.createChildObjectContext(_tokenInputRow, _tokenInputCol);
+        }
+      }
+      return null;
+    }
+    return (nextToken() == JsonToken.VALUE_STRING) ? getText() : null;
+  }
+
+  @Override public int nextIntValue(int defaultValue) throws JacksonException {
+    if (_currToken == JsonToken.PROPERTY_NAME) {
+      _nameCopied = false;
+      JsonToken t = _nextToken;
+      _nextToken = null;
+      _currToken = t;
+      if (t == JsonToken.VALUE_NUMBER_INT) {
+        return getIntValue();
+      }
+      if (t == JsonToken.START_ARRAY) {
+        _streamReadContext = _streamReadContext.createChildArrayContext(_tokenInputRow, _tokenInputCol);
+      } else {
+        if (t == JsonToken.START_OBJECT) {
+          _streamReadContext = _streamReadContext.createChildObjectContext(_tokenInputRow, _tokenInputCol);
+        }
+      }
+      return defaultValue;
+    }
+    return (nextToken() == JsonToken.VALUE_NUMBER_INT) ? getIntValue() : defaultValue;
+  }
+
+  @Override public long nextLongValue(long defaultValue) throws JacksonException {
+    if (_currToken == JsonToken.PROPERTY_NAME) {
+      _nameCopied = false;
+      JsonToken t = _nextToken;
+      _nextToken = null;
+      _currToken = t;
+      if (t == JsonToken.VALUE_NUMBER_INT) {
+        return getLongValue();
+      }
+      if (t == JsonToken.START_ARRAY) {
+        _streamReadContext = _streamReadContext.createChildArrayContext(_tokenInputRow, _tokenInputCol);
+      } else {
+        if (t == JsonToken.START_OBJECT) {
+          _streamReadContext = _streamReadContext.createChildObjectContext(_tokenInputRow, _tokenInputCol);
+        }
+      }
+      return defaultValue;
+    }
+    return (nextToken() == JsonToken.VALUE_NUMBER_INT) ? getLongValue() : defaultValue;
+  }
+
+  @Override public Boolean nextBooleanValue() throws JacksonException {
+    if (_currToken == JsonToken.PROPERTY_NAME) {
+      _nameCopied = false;
+      JsonToken t = _nextToken;
+      _nextToken = null;
+      _currToken = t;
+      if (t == JsonToken.VALUE_TRUE) {
+        return Boolean.TRUE;
+      }
+      if (t == JsonToken.VALUE_FALSE) {
+        return Boolean.FALSE;
+      }
+      if (t == JsonToken.START_ARRAY) {
+        _streamReadContext = _streamReadContext.createChildArrayContext(_tokenInputRow, _tokenInputCol);
+      } else {
+        if (t == JsonToken.START_OBJECT) {
+          _streamReadContext = _streamReadContext.createChildObjectContext(_tokenInputRow, _tokenInputCol);
+        }
+      }
+      return null;
+    }
+    JsonToken t = nextToken();
+    if (t == JsonToken.VALUE_TRUE) {
+      return Boolean.TRUE;
+    }
+    if (t == JsonToken.VALUE_FALSE) {
+      return Boolean.FALSE;
+    }
+    return null;
+  }
+
+  protected final JsonToken _parseFloatThatStartsWithPeriod() throws JacksonException {
+    if (!isEnabled(JsonReadFeature.ALLOW_LEADING_DECIMAL_POINT_FOR_NUMBERS)) {
+      return _handleUnexpectedValue(INT_PERIOD);
+    }
+    return _parseFloat(_textBuffer.emptyAndGetCurrentSegment(), 0, INT_PERIOD, false, 0);
+  }
+
+  /**
+     * Initial parsing method for number values. It needs to be able
+     * to parse enough input to be able to determine whether the
+     * value is to be considered a simple integer value, or a more
+     * generic decimal value: latter of which needs to be expressed
+     * as a floating point number. The basic rule is that if the number
+     * has no fractional or exponential part, it is an integer; otherwise
+     * a floating point number.
+     *<p>
+     * Because much of input has to be processed in any case, no partial
+     * parsing is done: all input text will be stored for further
+     * processing. However, actual numeric value conversion will be
+     * deferred, since it is usually the most complicated and costliest
+     * part of processing.
+     *
+     * @param c The first non-null digit character of the number to parse
+     *
+     * @return Type of token decoded, usually {@link JsonToken#VALUE_NUMBER_INT}
+     *    or {@link JsonToken#VALUE_NUMBER_FLOAT}
+     *
+     * @throws WrappedIOException for low-level read issues
+     * @throws StreamReadException for decoding problems
+     */
+  protected JsonToken _parsePosNumber(int c) throws JacksonException {
+    char[] outBuf = _textBuffer.emptyAndGetCurrentSegment();
+    if (c == INT_0) {
+      c = _verifyNoLeadingZeroes();
+    }
+    outBuf[0] = (char) c;
+    int intLen = 1;
+    int outPtr = 1;
+    final int end = Math.min(_inputEnd, _inputPtr + outBuf.length - 1);
+    while (true) {
+      if (_inputPtr >= end) {
+        return _parseNumber2(outBuf, outPtr, false, intLen);
+      }
+      c = (int) _inputBuffer[_inputPtr++] & 0xFF;
+      if (c < INT_0 || c > INT_9) {
+        break;
+      }
+      ++intLen;
+      outBuf[outPtr++] = (char) c;
+    }
+    if (c == INT_PERIOD || c == INT_e || c == INT_E) {
+      return _parseFloat(outBuf, outPtr, c, false, intLen);
+    }
+    --_inputPtr;
+    _textBuffer.setCurrentLength(outPtr);
+    if (_streamReadContext.inRoot()) {
+      _verifyRootSpace(c);
+    }
+    return resetInt(false, intLen);
+  }
+
+
+<<<<<<< commits-rmx_100/FasterXML/jackson-core/fcf810565b3e7253e2bb9e6ff53158ed3d96f482/UTF8StreamJsonParser-3b761bc.java
+  private final JsonToken _parsePossibleNumber(boolean negative) throws JacksonException {
+    char[] outBuf = _textBuffer.emptyAndGetCurrentSegment();
+    int outPtr = 0;
+    if (negative) {
+      outBuf[outPtr++] = '-';
+    }
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    int c = (int) _inputBuffer[_inputPtr++] & 0xFF;
+    if (c <= INT_0) {
+      if (c != INT_0) {
+        if (c == INT_PERIOD) {
+          return _parseFloatThatStartsWithPeriod();
+        }
+        return _handleInvalidNumberStart(c, negative);
+      }
+      c = _verifyNoLeadingZeroes();
+    } else {
+      if (c > INT_9) {
+        return _handleInvalidNumberStart(c, negative);
+      }
+    }
+    outBuf[outPtr++] = (char) c;
+    int intLen = 1;
+    final int end = Math.min(_inputEnd, _inputPtr + outBuf.length - outPtr);
+    while (true) {
+      if (_inputPtr >= end) {
+        return _parseNumber2(outBuf, outPtr, negative, intLen);
+      }
+      c = (int) _inputBuffer[_inputPtr++] & 0xFF;
+      if (c < INT_0 || c > INT_9) {
+        break;
+      }
+      ++intLen;
+      outBuf[outPtr++] = (char) c;
+    }
+    if (c == INT_PERIOD || c == INT_e || c == INT_E) {
+      return _parseFloat(outBuf, outPtr, c, negative, intLen);
+    }
+    --_inputPtr;
+    _textBuffer.setCurrentLength(outPtr);
+    if (_streamReadContext.inRoot()) {
+      _verifyRootSpace(c);
+    }
+    return resetInt(negative, intLen);
+  }
+=======
+>>>>>>> Unknown file: This is a bug in JDime.
+
+
+  private final JsonToken _parseNumber2(char[] outBuf, int outPtr, boolean negative, int intPartLength) throws JacksonException {
+    while (true) {
+      if (_inputPtr >= _inputEnd && !_loadMore()) {
+        _textBuffer.setCurrentLength(outPtr);
+        return resetInt(negative, intPartLength);
+      }
+      int c = (int) _inputBuffer[_inputPtr++] & 0xFF;
+      if (c > INT_9 || c < INT_0) {
+        if (c == INT_PERIOD || c == INT_e || c == INT_E) {
+          return _parseFloat(outBuf, outPtr, c, negative, intPartLength);
+        }
+        break;
+      }
+      if (outPtr >= outBuf.length) {
+        outBuf = _textBuffer.finishCurrentSegment();
+        outPtr = 0;
+      }
+      outBuf[outPtr++] = (char) c;
+      ++intPartLength;
+    }
+    --_inputPtr;
+    _textBuffer.setCurrentLength(outPtr);
+    if (_streamReadContext.inRoot()) {
+      _verifyRootSpace(_inputBuffer[_inputPtr] & 0xFF);
+    }
+    return resetInt(negative, intPartLength);
+  }
+
+  private final int _verifyNoLeadingZeroes() throws JacksonException {
+    if (_inputPtr >= _inputEnd && !_loadMore()) {
+      return INT_0;
+    }
+    int ch = _inputBuffer[_inputPtr] & 0xFF;
+    if (ch < INT_0 || ch > INT_9) {
+      return INT_0;
+    }
+    if (!isEnabled(JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS)) {
+      _reportInvalidNumber("Leading zeroes not allowed");
+    }
+    ++_inputPtr;
+    if (ch == INT_0) {
+      while (_inputPtr < _inputEnd || _loadMore()) {
+        ch = _inputBuffer[_inputPtr] & 0xFF;
+        if (ch < INT_0 || ch > INT_9) {
+          return INT_0;
+        }
+        ++_inputPtr;
+        if (ch != INT_0) {
+          break;
+        }
+      }
+    }
+    return ch;
+  }
+
+  private final JsonToken _parseFloat(char[] outBuf, int outPtr, int c, boolean negative, int integerPartLength) throws JacksonException {
+    int fractLen = 0;
+    boolean eof = false;
+    if (c == INT_PERIOD) {
+      if (outPtr >= outBuf.length) {
+        outBuf = _textBuffer.finishCurrentSegment();
+        outPtr = 0;
+      }
+      outBuf[outPtr++] = (char) c;
+      fract_loop:
+      while (true) {
+        if (_inputPtr >= _inputEnd && !_loadMore()) {
+          eof = true;
+          break fract_loop;
+        }
+        c = (int) _inputBuffer[_inputPtr++] & 0xFF;
+        if (c < INT_0 || c > INT_9) {
+          break fract_loop;
+        }
+        ++fractLen;
+        if (outPtr >= outBuf.length) {
+          outBuf = _textBuffer.finishCurrentSegment();
+          outPtr = 0;
+        }
+        outBuf[outPtr++] = (char) c;
+      }
+      if (fractLen == 0) {
+        if (!isEnabled(JsonReadFeature.ALLOW_TRAILING_DECIMAL_POINT_FOR_NUMBERS)) {
+          _reportUnexpectedNumberChar(c, "Decimal point not followed by a digit");
+        }
+      }
+    }
+    int expLen = 0;
+    if (c == INT_e || c == INT_E) {
+      if (outPtr >= outBuf.length) {
+        outBuf = _textBuffer.finishCurrentSegment();
+        outPtr = 0;
+      }
+      outBuf[outPtr++] = (char) c;
+      if (_inputPtr >= _inputEnd) {
+        _loadMoreGuaranteed();
+      }
+      c = (int) _inputBuffer[_inputPtr++] & 0xFF;
+      if (c == '-' || c == '+') {
+        if (outPtr >= outBuf.length) {
+          outBuf = _textBuffer.finishCurrentSegment();
+          outPtr = 0;
+        }
+        outBuf[outPtr++] = (char) c;
+        if (_inputPtr >= _inputEnd) {
+          _loadMoreGuaranteed();
+        }
+        c = (int) _inputBuffer[_inputPtr++] & 0xFF;
+      }
+      exp_loop:
+      while (c >= INT_0 && c <= INT_9) {
+        ++expLen;
+        if (outPtr >= outBuf.length) {
+          outBuf = _textBuffer.finishCurrentSegment();
+          outPtr = 0;
+        }
+        outBuf[outPtr++] = (char) c;
+        if (_inputPtr >= _inputEnd && !_loadMore()) {
+          eof = true;
+          break exp_loop;
+        }
+        c = (int) _inputBuffer[_inputPtr++] & 0xFF;
+      }
+      if (expLen == 0) {
+        _reportUnexpectedNumberChar(c, "Exponent indicator not followed by a digit");
+      }
+    }
+    if (!eof) {
+      --_inputPtr;
+      if (_streamReadContext.inRoot()) {
+        _verifyRootSpace(c);
+      }
+    }
+    _textBuffer.setCurrentLength(outPtr);
+    return resetFloat(negative, integerPartLength, fractLen, expLen);
+  }
+
+  /**
+     * Method called to ensure that a root-value is followed by a space
+     * token.
+     *<p>
+     * NOTE: caller MUST ensure there is at least one character available;
+     * and that input pointer is AT given char (not past)
+     *
+     * @param ch First character of likely white space to skip
+     *
+     * @throws WrappedIOException for low-level read issues
+     * @throws StreamReadException for decoding problems (invalid white space)
+     */
+  private final void _verifyRootSpace(int ch) throws JacksonException {
+    ++_inputPtr;
+    switch (ch) {
+      case ' ':
+      case '\t':
+      return;
+      case '\r':
+      _skipCR();
+      return;
+      case '\n':
+      ++_currInputRow;
+      _currInputRowStart = _inputPtr;
+      return;
+    }
+    _reportMissingRootWS(ch);
+  }
+
+  protected final String _parseName(int i) throws JacksonException {
+    if (i != INT_QUOTE) {
+      return _handleOddName(i);
+    }
+    if ((_inputPtr + 13) > _inputEnd) {
+      return slowParseName();
+    }
+    final byte[] input = _inputBuffer;
+    final int[] codes = _icLatin1;
+    int q = input[_inputPtr++] & 0xFF;
+    if (codes[q] == 0) {
+      i = input[_inputPtr++] & 0xFF;
+      if (codes[i] == 0) {
+        q = (q << 8) | i;
+        i = input[_inputPtr++] & 0xFF;
+        if (codes[i] == 0) {
+          q = (q << 8) | i;
+          i = input[_inputPtr++] & 0xFF;
+          if (codes[i] == 0) {
+            q = (q << 8) | i;
+            i = input[_inputPtr++] & 0xFF;
+            if (codes[i] == 0) {
+              _quad1 = q;
+              return parseMediumName(i);
+            }
+            if (i == INT_QUOTE) {
+              return findName(q, 4);
+            }
+            return parseName(q, i, 4);
+          }
+          if (i == INT_QUOTE) {
+            return findName(q, 3);
+          }
+          return parseName(q, i, 3);
+        }
+        if (i == INT_QUOTE) {
+          return findName(q, 2);
+        }
+        return parseName(q, i, 2);
+      }
+      if (i == INT_QUOTE) {
+        return findName(q, 1);
+      }
+      return parseName(q, i, 1);
+    }
+    if (q == INT_QUOTE) {
+      return "";
+    }
+    return parseName(0, q, 0);
+  }
+
+  protected final String parseMediumName(int q2) throws JacksonException {
+    final byte[] input = _inputBuffer;
+    final int[] codes = _icLatin1;
+    int i = input[_inputPtr++] & 0xFF;
+    if (codes[i] != 0) {
+      if (i == INT_QUOTE) {
+        return findName(_quad1, q2, 1);
+      }
+      return parseName(_quad1, q2, i, 1);
+    }
+    q2 = (q2 << 8) | i;
+    i = input[_inputPtr++] & 0xFF;
+    if (codes[i] != 0) {
+      if (i == INT_QUOTE) {
+        return findName(_quad1, q2, 2);
+      }
+      return parseName(_quad1, q2, i, 2);
+    }
+    q2 = (q2 << 8) | i;
+    i = input[_inputPtr++] & 0xFF;
+    if (codes[i] != 0) {
+      if (i == INT_QUOTE) {
+        return findName(_quad1, q2, 3);
+      }
+      return parseName(_quad1, q2, i, 3);
+    }
+    q2 = (q2 << 8) | i;
+    i = input[_inputPtr++] & 0xFF;
+    if (codes[i] != 0) {
+      if (i == INT_QUOTE) {
+        return findName(_quad1, q2, 4);
+      }
+      return parseName(_quad1, q2, i, 4);
+    }
+    return parseMediumName2(i, q2);
+  }
+
+  protected final String parseMediumName2(int q3, final int q2) throws JacksonException {
+    final byte[] input = _inputBuffer;
+    final int[] codes = _icLatin1;
+    int i = input[_inputPtr++] & 0xFF;
+    if (codes[i] != 0) {
+      if (i == INT_QUOTE) {
+        return findName(_quad1, q2, q3, 1);
+      }
+      return parseName(_quad1, q2, q3, i, 1);
+    }
+    q3 = (q3 << 8) | i;
+    i = input[_inputPtr++] & 0xFF;
+    if (codes[i] != 0) {
+      if (i == INT_QUOTE) {
+        return findName(_quad1, q2, q3, 2);
+      }
+      return parseName(_quad1, q2, q3, i, 2);
+    }
+    q3 = (q3 << 8) | i;
+    i = input[_inputPtr++] & 0xFF;
+    if (codes[i] != 0) {
+      if (i == INT_QUOTE) {
+        return findName(_quad1, q2, q3, 3);
+      }
+      return parseName(_quad1, q2, q3, i, 3);
+    }
+    q3 = (q3 << 8) | i;
+    i = input[_inputPtr++] & 0xFF;
+    if (codes[i] != 0) {
+      if (i == INT_QUOTE) {
+        return findName(_quad1, q2, q3, 4);
+      }
+      return parseName(_quad1, q2, q3, i, 4);
+    }
+    return parseLongName(i, q2, q3);
+  }
+
+  protected final String parseLongName(int q, final int q2, int q3) throws JacksonException {
+    _quadBuffer[0] = _quad1;
+    _quadBuffer[1] = q2;
+    _quadBuffer[2] = q3;
+    final byte[] input = _inputBuffer;
+    final int[] codes = _icLatin1;
+    int qlen = 3;
+    while ((_inputPtr + 4) <= _inputEnd) {
+      int i = input[_inputPtr++] & 0xFF;
+      if (codes[i] != 0) {
+        if (i == INT_QUOTE) {
+          return findName(_quadBuffer, qlen, q, 1);
+        }
+        return parseEscapedName(_quadBuffer, qlen, q, i, 1);
+      }
+      q = (q << 8) | i;
+      i = input[_inputPtr++] & 0xFF;
+      if (codes[i] != 0) {
+        if (i == INT_QUOTE) {
+          return findName(_quadBuffer, qlen, q, 2);
+        }
+        return parseEscapedName(_quadBuffer, qlen, q, i, 2);
+      }
+      q = (q << 8) | i;
+      i = input[_inputPtr++] & 0xFF;
+      if (codes[i] != 0) {
+        if (i == INT_QUOTE) {
+          return findName(_quadBuffer, qlen, q, 3);
+        }
+        return parseEscapedName(_quadBuffer, qlen, q, i, 3);
+      }
+      q = (q << 8) | i;
+      i = input[_inputPtr++] & 0xFF;
+      if (codes[i] != 0) {
+        if (i == INT_QUOTE) {
+          return findName(_quadBuffer, qlen, q, 4);
+        }
+        return parseEscapedName(_quadBuffer, qlen, q, i, 4);
+      }
+      if (qlen >= _quadBuffer.length) {
+        _quadBuffer = growArrayBy(_quadBuffer, qlen);
+      }
+      _quadBuffer[qlen++] = q;
+      q = i;
+    }
+    return parseEscapedName(_quadBuffer, qlen, 0, q, 0);
+  }
+
+  protected String slowParseName() throws JacksonException {
+    if (_inputPtr >= _inputEnd) {
+      if (!_loadMore()) {
+        _reportInvalidEOF(": was expecting closing \'\"\' for name", JsonToken.PROPERTY_NAME);
+      }
+    }
+    int i = _inputBuffer[_inputPtr++] & 0xFF;
+    if (i == INT_QUOTE) {
+      return "";
+    }
+    return parseEscapedName(_quadBuffer, 0, 0, i, 0);
+  }
+
+  private final String parseName(int q1, int ch, int lastQuadBytes) throws JacksonException {
+    return parseEscapedName(_quadBuffer, 0, q1, ch, lastQuadBytes);
+  }
+
+  private final String parseName(int q1, int q2, int ch, int lastQuadBytes) throws JacksonException {
+    _quadBuffer[0] = q1;
+    return parseEscapedName(_quadBuffer, 1, q2, ch, lastQuadBytes);
+  }
+
+  private final String parseName(int q1, int q2, int q3, int ch, int lastQuadBytes) throws JacksonException {
+    _quadBuffer[0] = q1;
+    _quadBuffer[1] = q2;
+    return parseEscapedName(_quadBuffer, 2, q3, ch, lastQuadBytes);
+  }
+
+  protected final String parseEscapedName(int[] quads, int qlen, int currQuad, int ch, int currQuadBytes) throws JacksonException {
+    final int[] codes = _icLatin1;
+    while (true) {
+      if (codes[ch] != 0) {
+        if (ch == INT_QUOTE) {
+          break;
+        }
+        if (ch != INT_BACKSLASH) {
+          _throwUnquotedSpace(ch, "name");
+        } else {
+          ch = _decodeEscaped();
+        }
+        if (ch > 127) {
+          if (currQuadBytes >= 4) {
+            if (qlen >= quads.length) {
+              _quadBuffer = quads = growArrayBy(quads, quads.length);
+            }
+            quads[qlen++] = currQuad;
+            currQuad = 0;
+            currQuadBytes = 0;
+          }
+          if (ch < 0x800) {
+            currQuad = (currQuad << 8) | (0xc0 | (ch >> 6));
+            ++currQuadBytes;
+          } else {
+            currQuad = (currQuad << 8) | (0xe0 | (ch >> 12));
+            ++currQuadBytes;
+            if (currQuadBytes >= 4) {
+              if (qlen >= quads.length) {
+                _quadBuffer = quads = growArrayBy(quads, quads.length);
+              }
+              quads[qlen++] = currQuad;
+              currQuad = 0;
+              currQuadBytes = 0;
+            }
+            currQuad = (currQuad << 8) | (0x80 | ((ch >> 6) & 0x3f));
+            ++currQuadBytes;
+          }
+          ch = 0x80 | (ch & 0x3f);
+        }
+      }
+      if (currQuadBytes < 4) {
+        ++currQuadBytes;
+        currQuad = (currQuad << 8) | ch;
+      } else {
+        if (qlen >= quads.length) {
+          _quadBuffer = quads = growArrayBy(quads, quads.length);
+        }
+        quads[qlen++] = currQuad;
+        currQuad = ch;
+        currQuadBytes = 1;
+      }
+      if (_inputPtr >= _inputEnd) {
+        if (!_loadMore()) {
+          _reportInvalidEOF(" in property name", JsonToken.PROPERTY_NAME);
+        }
+      }
+      ch = _inputBuffer[_inputPtr++] & 0xFF;
+    }
+    if (currQuadBytes > 0) {
+      if (qlen >= quads.length) {
+        _quadBuffer = quads = growArrayBy(quads, quads.length);
+      }
+      quads[qlen++] = _padLastQuad(currQuad, currQuadBytes);
+    }
+    String name = _symbols.findName(quads, qlen);
+    if (name == null) {
+      name = addName(quads, qlen, currQuadBytes);
+    }
+    return name;
+  }
+
+  /**
+     * Method called when we see non-white space character other
+     * than double quote, when expecting a property name.
+     * In standard mode will just throw an exception; but
+     * in non-standard modes may be able to parse name.
+     *
+     * @param ch First undecoded character of possible "odd name" to decode
+     *
+     * @return Name decoded, if allowed and successful
+     *
+     * @throws WrappedIOException for low-level read issues
+     * @throws StreamReadException for decoding problems (invalid name)
+     */
+  protected String _handleOddName(int ch) throws JacksonException {
+    if (ch == INT_APOS && isEnabled(JsonReadFeature.ALLOW_SINGLE_QUOTES)) {
+      return _parseAposName();
+    }
+    if (!isEnabled(JsonReadFeature.ALLOW_UNQUOTED_PROPERTY_NAMES)) {
+      char c = (char) _decodeCharForError(ch);
+      _reportUnexpectedChar(c, "was expecting double-quote to start property name");
+    }
+    final int[] codes = CharTypes.getInputCodeUtf8JsNames();
+    if (codes[ch] != 0) {
+      _reportUnexpectedChar(ch, "was expecting either valid name character (for unquoted name) or double-quote (for quoted) to start property name");
+    }
+    int[] quads = _quadBuffer;
+    int qlen = 0;
+    int currQuad = 0;
+    int currQuadBytes = 0;
+    while (true) {
+      if (currQuadBytes < 4) {
+        ++currQuadBytes;
+        currQuad = (currQuad << 8) | ch;
+      } else {
+        if (qlen >= quads.length) {
+          _quadBuffer = quads = growArrayBy(quads, quads.length);
+        }
+        quads[qlen++] = currQuad;
+        currQuad = ch;
+        currQuadBytes = 1;
+      }
+      if (_inputPtr >= _inputEnd) {
+        if (!_loadMore()) {
+          _reportInvalidEOF(" in property name", JsonToken.PROPERTY_NAME);
+        }
+      }
+      ch = _inputBuffer[_inputPtr] & 0xFF;
+      if (codes[ch] != 0) {
+        break;
+      }
+      ++_inputPtr;
+    }
+    if (currQuadBytes > 0) {
+      if (qlen >= quads.length) {
+        _quadBuffer = quads = growArrayBy(quads, quads.length);
+      }
+      quads[qlen++] = currQuad;
+    }
+    String name = _symbols.findName(quads, qlen);
+    if (name == null) {
+      name = addName(quads, qlen, currQuadBytes);
+    }
+    return name;
+  }
+
+  protected String _parseAposName() throws JacksonException {
+    if (_inputPtr >= _inputEnd) {
+      if (!_loadMore()) {
+        _reportInvalidEOF(": was expecting closing \'\'\' for property name", JsonToken.PROPERTY_NAME);
+      }
+    }
+    int ch = _inputBuffer[_inputPtr++] & 0xFF;
+    if (ch == INT_APOS) {
+      return "";
+    }
+    int[] quads = _quadBuffer;
+    int qlen = 0;
+    int currQuad = 0;
+    int currQuadBytes = 0;
+    final int[] codes = _icLatin1;
+    while (true) {
+      if (ch == INT_APOS) {
+        break;
+      }
+      if ((codes[ch] != 0) && (ch != INT_QUOTE)) {
+        if (ch != '\\') {
+          _throwUnquotedSpace(ch, "name");
+        } else {
+          ch = _decodeEscaped();
+        }
+        if (ch > 127) {
+          if (currQuadBytes >= 4) {
+            if (qlen >= quads.length) {
+              _quadBuffer = quads = growArrayBy(quads, quads.length);
+            }
+            quads[qlen++] = currQuad;
+            currQuad = 0;
+            currQuadBytes = 0;
+          }
+          if (ch < 0x800) {
+            currQuad = (currQuad << 8) | (0xc0 | (ch >> 6));
+            ++currQuadBytes;
+          } else {
+            currQuad = (currQuad << 8) | (0xe0 | (ch >> 12));
+            ++currQuadBytes;
+            if (currQuadBytes >= 4) {
+              if (qlen >= quads.length) {
+                _quadBuffer = quads = growArrayBy(quads, quads.length);
+              }
+              quads[qlen++] = currQuad;
+              currQuad = 0;
+              currQuadBytes = 0;
+            }
+            currQuad = (currQuad << 8) | (0x80 | ((ch >> 6) & 0x3f));
+            ++currQuadBytes;
+          }
+          ch = 0x80 | (ch & 0x3f);
+        }
+      }
+      if (currQuadBytes < 4) {
+        ++currQuadBytes;
+        currQuad = (currQuad << 8) | ch;
+      } else {
+        if (qlen >= quads.length) {
+          _quadBuffer = quads = growArrayBy(quads, quads.length);
+        }
+        quads[qlen++] = currQuad;
+        currQuad = ch;
+        currQuadBytes = 1;
+      }
+      if (_inputPtr >= _inputEnd) {
+        if (!_loadMore()) {
+          _reportInvalidEOF(" in property name", JsonToken.PROPERTY_NAME);
+        }
+      }
+      ch = _inputBuffer[_inputPtr++] & 0xFF;
+    }
+    if (currQuadBytes > 0) {
+      if (qlen >= quads.length) {
+        _quadBuffer = quads = growArrayBy(quads, quads.length);
+      }
+      quads[qlen++] = _padLastQuad(currQuad, currQuadBytes);
+    }
+    String name = _symbols.findName(quads, qlen);
+    if (name == null) {
+      name = addName(quads, qlen, currQuadBytes);
+    }
+    return name;
+  }
+
+  private final String findName(int q1, int lastQuadBytes) throws StreamReadException {
+    q1 = _padLastQuad(q1, lastQuadBytes);
+    String name = _symbols.findName(q1);
+    if (name != null) {
+      return name;
+    }
+    _quadBuffer[0] = q1;
+    return addName(_quadBuffer, 1, lastQuadBytes);
+  }
+
+  private final String findName(int q1, int q2, int lastQuadBytes) throws StreamReadException {
+    q2 = _padLastQuad(q2, lastQuadBytes);
+    String name = _symbols.findName(q1, q2);
+    if (name != null) {
+      return name;
+    }
+    _quadBuffer[0] = q1;
+    _quadBuffer[1] = q2;
+    return addName(_quadBuffer, 2, lastQuadBytes);
+  }
+
+  private final String findName(int q1, int q2, int q3, int lastQuadBytes) throws StreamReadException {
+    q3 = _padLastQuad(q3, lastQuadBytes);
+    String name = _symbols.findName(q1, q2, q3);
+    if (name != null) {
+      return name;
+    }
+    int[] quads = _quadBuffer;
+    quads[0] = q1;
+    quads[1] = q2;
+    quads[2] = _padLastQuad(q3, lastQuadBytes);
+    return addName(quads, 3, lastQuadBytes);
+  }
+
+  private final String findName(int[] quads, int qlen, int lastQuad, int lastQuadBytes) throws StreamReadException {
+    if (qlen >= quads.length) {
+      _quadBuffer = quads = growArrayBy(quads, quads.length);
+    }
+    quads[qlen++] = _padLastQuad(lastQuad, lastQuadBytes);
+    String name = _symbols.findName(quads, qlen);
+    if (name == null) {
+      return addName(quads, qlen, lastQuadBytes);
+    }
+    return name;
+  }
+
+  private final String addName(int[] quads, int qlen, int lastQuadBytes) throws StreamReadException {
+    int byteLen = (qlen << 2) - 4 + lastQuadBytes;
+    int lastQuad;
+    if (lastQuadBytes < 4) {
+      lastQuad = quads[qlen - 1];
+      quads[qlen - 1] = (lastQuad << ((4 - lastQuadBytes) << 3));
+    } else {
+      lastQuad = 0;
+    }
+    char[] cbuf = _textBuffer.emptyAndGetCurrentSegment();
+    int cix = 0;
+    for (int ix = 0; ix < byteLen; ) {
+      int ch = quads[ix >> 2];
+      int byteIx = (ix & 3);
+      ch = (ch >> ((3 - byteIx) << 3)) & 0xFF;
+      ++ix;
+      if (ch > 127) {
+        int needed;
+        if ((ch & 0xE0) == 0xC0) {
+          ch &= 0x1F;
+          needed = 1;
+        } else {
+          if ((ch & 0xF0) == 0xE0) {
+            ch &= 0x0F;
+            needed = 2;
+          } else {
+            if ((ch & 0xF8) == 0xF0) {
+              ch &= 0x07;
+              needed = 3;
+            } else {
+              _reportInvalidInitial(ch);
+              needed = ch = 1;
+            }
+          }
+        }
+        if ((ix + needed) > byteLen) {
+          _reportInvalidEOF(" in property name", JsonToken.PROPERTY_NAME);
+        }
+        int ch2 = quads[ix >> 2];
+        byteIx = (ix & 3);
+        ch2 = (ch2 >> ((3 - byteIx) << 3));
+        ++ix;
+        if ((ch2 & 0xC0) != 0x080) {
+          _reportInvalidOther(ch2);
+        }
+        ch = (ch << 6) | (ch2 & 0x3F);
+        if (needed > 1) {
+          ch2 = quads[ix >> 2];
+          byteIx = (ix & 3);
+          ch2 = (ch2 >> ((3 - byteIx) << 3));
+          ++ix;
+          if ((ch2 & 0xC0) != 0x080) {
+            _reportInvalidOther(ch2);
+          }
+          ch = (ch << 6) | (ch2 & 0x3F);
+          if (needed > 2) {
+            ch2 = quads[ix >> 2];
+            byteIx = (ix & 3);
+            ch2 = (ch2 >> ((3 - byteIx) << 3));
+            ++ix;
+            if ((ch2 & 0xC0) != 0x080) {
+              _reportInvalidOther(ch2 & 0xFF);
+            }
+            ch = (ch << 6) | (ch2 & 0x3F);
+          }
+        }
+        if (needed > 2) {
+          ch -= 0x10000;
+          if (cix >= cbuf.length) {
+            cbuf = _textBuffer.expandCurrentSegment();
+          }
+          cbuf[cix++] = (char) (0xD800 + (ch >> 10));
+          ch = 0xDC00 | (ch & 0x03FF);
+        }
+      }
+      if (cix >= cbuf.length) {
+        cbuf = _textBuffer.expandCurrentSegment();
+      }
+      cbuf[cix++] = (char) ch;
+    }
+    String baseName = new String(cbuf, 0, cix);
+    if (lastQuadBytes < 4) {
+      quads[qlen - 1] = lastQuad;
+    }
+    return _symbols.addName(baseName, quads, qlen);
+  }
+
+  private final static int _padLastQuad(int q, int bytes) {
+    return (bytes == 4) ? q : (q | (-1 << (bytes << 3)));
+  }
+
+  protected void _loadMoreGuaranteed() throws JacksonException {
+    if (!_loadMore()) {
+      _reportInvalidEOF();
+    }
+  }
+
+  protected void _finishString() throws JacksonException {
+    int ptr = _inputPtr;
+    if (ptr >= _inputEnd) {
+      _loadMoreGuaranteed();
+      ptr = _inputPtr;
+    }
+    int outPtr = 0;
+    char[] outBuf = _textBuffer.emptyAndGetCurrentSegment();
+    final int[] codes = _icUTF8;
+    final int max = Math.min(_inputEnd, (ptr + outBuf.length));
+    final byte[] inputBuffer = _inputBuffer;
+    while (ptr < max) {
+      int c = (int) inputBuffer[ptr] & 0xFF;
+      if (codes[c] != 0) {
+        if (c == INT_QUOTE) {
+          _inputPtr = ptr + 1;
+          _textBuffer.setCurrentLength(outPtr);
+          return;
+        }
+        break;
+      }
+      ++ptr;
+      outBuf[outPtr++] = (char) c;
+    }
+    _inputPtr = ptr;
+    _finishString2(outBuf, outPtr);
+  }
+
+  protected String _finishAndReturnString() throws JacksonException {
+    int ptr = _inputPtr;
+    if (ptr >= _inputEnd) {
+      _loadMoreGuaranteed();
+      ptr = _inputPtr;
+    }
+    int outPtr = 0;
+    char[] outBuf = _textBuffer.emptyAndGetCurrentSegment();
+    final int[] codes = _icUTF8;
+    final int max = Math.min(_inputEnd, (ptr + outBuf.length));
+    final byte[] inputBuffer = _inputBuffer;
+    while (ptr < max) {
+      int c = (int) inputBuffer[ptr] & 0xFF;
+      if (codes[c] != 0) {
+        if (c == INT_QUOTE) {
+          _inputPtr = ptr + 1;
+          return _textBuffer.setCurrentAndReturn(outPtr);
+        }
+        break;
+      }
+      ++ptr;
+      outBuf[outPtr++] = (char) c;
+    }
+    _inputPtr = ptr;
+    _finishString2(outBuf, outPtr);
+    return _textBuffer.contentsAsString();
+  }
+
+  private final void _finishString2(char[] outBuf, int outPtr) throws JacksonException {
+    int c;
+    final int[] codes = _icUTF8;
+    final byte[] inputBuffer = _inputBuffer;
+    main_loop:
+    while (true) {
+      ascii_loop:
+      while (true) {
+        int ptr = _inputPtr;
+        if (ptr >= _inputEnd) {
+          _loadMoreGuaranteed();
+          ptr = _inputPtr;
+        }
+        if (outPtr >= outBuf.length) {
+          outBuf = _textBuffer.finishCurrentSegment();
+          outPtr = 0;
+        }
+        final int max = Math.min(_inputEnd, (ptr + (outBuf.length - outPtr)));
+        while (ptr < max) {
+          c = (int) inputBuffer[ptr++] & 0xFF;
+          if (codes[c] != 0) {
+            _inputPtr = ptr;
+            break ascii_loop;
+          }
+          outBuf[outPtr++] = (char) c;
+        }
+        _inputPtr = ptr;
+      }
+      if (c == INT_QUOTE) {
+        break main_loop;
+      }
+      switch (codes[c]) {
+        case 1:
+        c = _decodeEscaped();
+        break;
+        case 2:
+        c = _decodeUtf8_2(c);
+        break;
+        case 3:
+        if ((_inputEnd - _inputPtr) >= 2) {
+          c = _decodeUtf8_3fast(c);
+        } else {
+          c = _decodeUtf8_3(c);
+        }
+        break;
+        case 4:
+        c = _decodeUtf8_4(c);
+        outBuf[outPtr++] = (char) (0xD800 | (c >> 10));
+        if (outPtr >= outBuf.length) {
+          outBuf = _textBuffer.finishCurrentSegment();
+          outPtr = 0;
+        }
+        c = 0xDC00 | (c & 0x3FF);
+        break;
+        default:
+        if (c < INT_SPACE) {
+          _throwUnquotedSpace(c, "string value");
+        } else {
+          _reportInvalidChar(c);
+        }
+      }
+      if (outPtr >= outBuf.length) {
+        outBuf = _textBuffer.finishCurrentSegment();
+        outPtr = 0;
+      }
+      outBuf[outPtr++] = (char) c;
+    }
+    _textBuffer.setCurrentLength(outPtr);
+  }
+
+  /**
+     * Method called to skim through rest of unparsed String value,
+     * if it is not needed. This can be done bit faster if contents
+     * need not be stored for future access.
+     *
+     * @throws WrappedIOException for low-level read issues
+     * @throws StreamReadException for decoding problems (invalid String value)
+     */
+  protected void _skipString() throws JacksonException {
+    _tokenIncomplete = false;
+    final int[] codes = _icUTF8;
+    final byte[] inputBuffer = _inputBuffer;
+    main_loop:
+    while (true) {
+      int c;
+      ascii_loop:
+      while (true) {
+        int ptr = _inputPtr;
+        int max = _inputEnd;
+        if (ptr >= max) {
+          _loadMoreGuaranteed();
+          ptr = _inputPtr;
+          max = _inputEnd;
+        }
+        while (ptr < max) {
+          c = (int) inputBuffer[ptr++] & 0xFF;
+          if (codes[c] != 0) {
+            _inputPtr = ptr;
+            break ascii_loop;
+          }
+        }
+        _inputPtr = ptr;
+      }
+      if (c == INT_QUOTE) {
+        break main_loop;
+      }
+      switch (codes[c]) {
+        case 1:
+        _decodeEscaped();
+        break;
+        case 2:
+        _skipUtf8_2();
+        break;
+        case 3:
+        _skipUtf8_3();
+        break;
+        case 4:
+        _skipUtf8_4(c);
+        break;
+        default:
+        if (c < INT_SPACE) {
+          _throwUnquotedSpace(c, "string value");
+        } else {
+          _reportInvalidChar(c);
+        }
+      }
+    }
+  }
+
+  /**
+     * Method for handling cases where first non-space character
+     * of an expected value token is not legal for standard JSON content.
+     *
+     * @param c First undecoded character of possible "odd value" to decode
+     *
+     * @return Type of value decoded, if allowed and successful
+     *
+     * @throws WrappedIOException for low-level read issues
+     * @throws StreamReadException for decoding problems
+     */
+  protected JsonToken _handleUnexpectedValue(int c) throws JacksonException {
+    switch (c) {
+      case ']':
+      if (!_streamReadContext.inArray()) {
+        break;
+      }
+      case ',':
+      if (!_streamReadContext.inRoot()) {
+        if ((_formatReadFeatures & FEAT_MASK_ALLOW_MISSING) != 0) {
+          --_inputPtr;
+          return JsonToken.VALUE_NULL;
+        }
+      }
+      case '}':
+      _reportUnexpectedChar(c, "expected a value");
+      case '\'':
+      if (isEnabled(JsonReadFeature.ALLOW_SINGLE_QUOTES)) {
+        return _handleApos();
+      }
+      break;
+      case 'N':
+      _matchToken("NaN", 1);
+      if (isEnabled(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)) {
+        return resetAsNaN("NaN", Double.NaN);
+      }
+      _reportError("Non-standard token \'NaN\': enable `JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS` to allow");
+      break;
+      case 'I':
+      _matchToken("Infinity", 1);
+      if (isEnabled(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)) {
+        return resetAsNaN("Infinity", Double.POSITIVE_INFINITY);
+      }
+      _reportError("Non-standard token \'Infinity\': enable `JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS` to allow");
+      break;
+      case '+':
+      if (_inputPtr >= _inputEnd) {
+        if (!_loadMore()) {
+          _reportInvalidEOFInValue(JsonToken.VALUE_NUMBER_INT);
+        }
+      }
+      return _handleInvalidNumberStart(_inputBuffer[_inputPtr++] & 0xFF, false, true);
+    }
+    if (Character.isJavaIdentifierStart(c)) {
+      _reportInvalidToken("" + ((char) c), _validJsonTokenList());
+    }
+    _reportUnexpectedChar(c, "expected a valid value " + _validJsonValueList());
+    return null;
+  }
+
+  protected JsonToken _handleApos() throws JacksonException {
+    int c = 0;
+    int outPtr = 0;
+    char[] outBuf = _textBuffer.emptyAndGetCurrentSegment();
+    final int[] codes = _icUTF8;
+    final byte[] inputBuffer = _inputBuffer;
+    main_loop:
+    while (true) {
+      ascii_loop:
+      while (true) {
+        if (_inputPtr >= _inputEnd) {
+          _loadMoreGuaranteed();
+        }
+        if (outPtr >= outBuf.length) {
+          outBuf = _textBuffer.finishCurrentSegment();
+          outPtr = 0;
+        }
+        int max = _inputEnd;
+        {
+          int max2 = _inputPtr + (outBuf.length - outPtr);
+          if (max2 < max) {
+            max = max2;
+          }
+        }
+        while (_inputPtr < max) {
+          c = (int) inputBuffer[_inputPtr++] & 0xFF;
+          if (c == INT_APOS) {
+            break main_loop;
+          }
+          if ((codes[c] != 0) && (c != INT_QUOTE)) {
+            break ascii_loop;
+          }
+          outBuf[outPtr++] = (char) c;
+        }
+      }
+      switch (codes[c]) {
+        case 1:
+        c = _decodeEscaped();
+        break;
+        case 2:
+        c = _decodeUtf8_2(c);
+        break;
+        case 3:
+        if ((_inputEnd - _inputPtr) >= 2) {
+          c = _decodeUtf8_3fast(c);
+        } else {
+          c = _decodeUtf8_3(c);
+        }
+        break;
+        case 4:
+        c = _decodeUtf8_4(c);
+        outBuf[outPtr++] = (char) (0xD800 | (c >> 10));
+        if (outPtr >= outBuf.length) {
+          outBuf = _textBuffer.finishCurrentSegment();
+          outPtr = 0;
+        }
+        c = 0xDC00 | (c & 0x3FF);
+        break;
+        default:
+        if (c < INT_SPACE) {
+          _throwUnquotedSpace(c, "string value");
+        }
+        _reportInvalidChar(c);
+      }
+      if (outPtr >= outBuf.length) {
+        outBuf = _textBuffer.finishCurrentSegment();
+        outPtr = 0;
+      }
+      outBuf[outPtr++] = (char) c;
+    }
+    _textBuffer.setCurrentLength(outPtr);
+    return JsonToken.VALUE_STRING;
+  }
+
+  protected JsonToken _handleInvalidNumberStart(int ch, final boolean neg, final boolean hasSign) throws JacksonException {
+    while (ch == 'I') {
+      if (_inputPtr >= _inputEnd) {
+        if (!_loadMore()) {
+          _reportInvalidEOFInValue(JsonToken.VALUE_NUMBER_FLOAT);
+        }
+      }
+      ch = _inputBuffer[_inputPtr++];
+      String match;
+      if (ch == 'N') {
+        match = neg ? "-INF" : "+INF";
+      } else {
+        if (ch == 'n') {
+          match = neg ? "-Infinity" : "+Infinity";
+        } else {
+          break;
+        }
+      }
+      _matchToken(match, 3);
+      if (isEnabled(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)) {
+        return resetAsNaN(match, neg ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY);
+      }
+      _reportError("Non-standard token \'%s\': enable `JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS` to allow", match);
+    }
+    while (ch == 'I') {
+      if (_inputPtr >= _inputEnd) {
+        if (!_loadMore()) {
+          _reportInvalidEOFInValue(JsonToken.VALUE_NUMBER_FLOAT);
+        }
+      }
+      ch = _inputBuffer[_inputPtr++];
+      String match;
+      if (ch == 'N') {
+        match = neg ? "-INF" : "+INF";
+      } else {
+        if (ch == 'n') {
+          match = neg ? "-Infinity" : "+Infinity";
+        } else {
+          break;
+        }
+      }
+      _matchToken(match, 3);
+      if (isEnabled(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)) {
+        return resetAsNaN(match, neg ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY);
+      }
+      _reportError("Non-standard token \'%s\': enable `JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS` to allow", match);
+    }_reportUnexpectedNumberChar(ch, "expected digit (0-9) to follow minus sign, for valid numeric value");return null;
+    return null;
+  }
+
+  protected final void _matchTrue() throws JacksonException {
+    int ptr = _inputPtr;
+    if ((ptr + 3) < _inputEnd) {
+      byte[] buf = _inputBuffer;
+      if ((buf[ptr++] == 'r') && (buf[ptr++] == 'u') && (buf[ptr++] == 'e')) {
+        int ch = buf[ptr] & 0xFF;
+        if (ch < INT_0 || (ch == INT_RBRACKET) || (ch == INT_RCURLY)) {
+          _inputPtr = ptr;
+          return;
+        }
+      }
+    }
+    _matchToken2("true", 1);
+  }
+
+  protected final void _matchFalse() throws JacksonException {
+    int ptr = _inputPtr;
+    if ((ptr + 4) < _inputEnd) {
+      byte[] buf = _inputBuffer;
+      if ((buf[ptr++] == 'a') && (buf[ptr++] == 'l') && (buf[ptr++] == 's') && (buf[ptr++] == 'e')) {
+        int ch = buf[ptr] & 0xFF;
+        if (ch < INT_0 || (ch == INT_RBRACKET) || (ch == INT_RCURLY)) {
+          _inputPtr = ptr;
+          return;
+        }
+      }
+    }
+    _matchToken2("false", 1);
+  }
+
+  protected final void _matchNull() throws JacksonException {
+    int ptr = _inputPtr;
+    if ((ptr + 3) < _inputEnd) {
+      byte[] buf = _inputBuffer;
+      if ((buf[ptr++] == 'u') && (buf[ptr++] == 'l') && (buf[ptr++] == 'l')) {
+        int ch = buf[ptr] & 0xFF;
+        if (ch < INT_0 || (ch == INT_RBRACKET) || (ch == INT_RCURLY)) {
+          _inputPtr = ptr;
+          return;
+        }
+      }
+    }
+    _matchToken2("null", 1);
+  }
+
+  protected final void _matchToken(String matchStr, int i) throws JacksonException {
+    final int len = matchStr.length();
+    if ((_inputPtr + len) >= _inputEnd) {
+      _matchToken2(matchStr, i);
+      return;
+    }
+    do {
+      if (_inputBuffer[_inputPtr] != matchStr.charAt(i)) {
+        _reportInvalidToken(matchStr.substring(0, i));
+      }
+      ++_inputPtr;
+    } while(++i < len);
+    int ch = _inputBuffer[_inputPtr] & 0xFF;
+    if (ch >= '0' && ch != ']' && ch != '}') {
+      _checkMatchEnd(matchStr, i, ch);
+    }
+  }
+
+  private final void _matchToken2(String matchStr, int i) throws JacksonException {
+    final int len = matchStr.length();
+    do {
+      if (((_inputPtr >= _inputEnd) && !_loadMore()) || (_inputBuffer[_inputPtr] != matchStr.charAt(i))) {
+        _reportInvalidToken(matchStr.substring(0, i));
+      }
+      ++_inputPtr;
+    } while(++i < len);
+    if (_inputPtr >= _inputEnd && !_loadMore()) {
+      return;
+    }
+    int ch = _inputBuffer[_inputPtr] & 0xFF;
+    if (ch >= '0' && ch != ']' && ch != '}') {
+      _checkMatchEnd(matchStr, i, ch);
+    }
+  }
+
+  private final void _checkMatchEnd(String matchStr, int i, int ch) throws JacksonException {
+    char c = (char) _decodeCharForError(ch);
+    if (Character.isJavaIdentifierPart(c)) {
+      _reportInvalidToken(matchStr.substring(0, i));
+    }
+  }
+
+  private final int _skipWS() throws JacksonException {
+    while (_inputPtr < _inputEnd) {
+      int i = _inputBuffer[_inputPtr++] & 0xFF;
+      if (i > INT_SPACE) {
+        if (i == INT_SLASH || i == INT_HASH) {
+          --_inputPtr;
+          return _skipWS2();
+        }
+        return i;
+      }
+      if (i != INT_SPACE) {
+        if (i == INT_LF) {
+          ++_currInputRow;
+          _currInputRowStart = _inputPtr;
+        } else {
+          if (i == INT_CR) {
+            _skipCR();
+          } else {
+            if (i != INT_TAB) {
+              _throwInvalidSpace(i);
+            }
+          }
+        }
+      }
+    }
+    return _skipWS2();
+  }
+
+  private final int _skipWS2() throws JacksonException {
+    while (_inputPtr < _inputEnd || _loadMore()) {
+      int i = _inputBuffer[_inputPtr++] & 0xFF;
+      if (i > INT_SPACE) {
+        if (i == INT_SLASH) {
+          _skipComment();
+          continue;
+        }
+        if (i == INT_HASH) {
+          if (_skipYAMLComment()) {
+            continue;
+          }
+        }
+        return i;
+      }
+      if (i != INT_SPACE) {
+        if (i == INT_LF) {
+          ++_currInputRow;
+          _currInputRowStart = _inputPtr;
+        } else {
+          if (i == INT_CR) {
+            _skipCR();
+          } else {
+            if (i != INT_TAB) {
+              _throwInvalidSpace(i);
+            }
+          }
+        }
+      }
+    }
+    throw _constructReadException("Unexpected end-of-input within/between " + _streamReadContext.typeDesc() + " entries");
+  }
+
+  private final int _skipWSOrEnd() throws JacksonException {
+    if (_inputPtr >= _inputEnd) {
+      if (!_loadMore()) {
+        return _eofAsNextChar();
+      }
+    }
+    int i = _inputBuffer[_inputPtr++] & 0xFF;
+    if (i > INT_SPACE) {
+      if (i == INT_SLASH || i == INT_HASH) {
+        --_inputPtr;
+        return _skipWSOrEnd2();
+      }
+      return i;
+    }
+    if (i != INT_SPACE) {
+      if (i == INT_LF) {
+        ++_currInputRow;
+        _currInputRowStart = _inputPtr;
+      } else {
+        if (i == INT_CR) {
+          _skipCR();
+        } else {
+          if (i != INT_TAB) {
+            _throwInvalidSpace(i);
+          }
+        }
+      }
+    }
+    while (_inputPtr < _inputEnd) {
+      i = _inputBuffer[_inputPtr++] & 0xFF;
+      if (i > INT_SPACE) {
+        if (i == INT_SLASH || i == INT_HASH) {
+          --_inputPtr;
+          return _skipWSOrEnd2();
+        }
+        return i;
+      }
+      if (i != INT_SPACE) {
+        if (i == INT_LF) {
+          ++_currInputRow;
+          _currInputRowStart = _inputPtr;
+        } else {
+          if (i == INT_CR) {
+            _skipCR();
+          } else {
+            if (i != INT_TAB) {
+              _throwInvalidSpace(i);
+            }
+          }
+        }
+      }
+    }
+    return _skipWSOrEnd2();
+  }
+
+  private final int _skipWSOrEnd2() throws JacksonException {
+    while ((_inputPtr < _inputEnd) || _loadMore()) {
+      int i = _inputBuffer[_inputPtr++] & 0xFF;
+      if (i > INT_SPACE) {
+        if (i == INT_SLASH) {
+          _skipComment();
+          continue;
+        }
+        if (i == INT_HASH) {
+          if (_skipYAMLComment()) {
+            continue;
+          }
+        }
+        return i;
+      } else {
+        if (i != INT_SPACE) {
+          if (i == INT_LF) {
+            ++_currInputRow;
+            _currInputRowStart = _inputPtr;
+          } else {
+            if (i == INT_CR) {
+              _skipCR();
+            } else {
+              if (i != INT_TAB) {
+                _throwInvalidSpace(i);
+              }
+            }
+          }
+        }
+      }
+    }
+    return _eofAsNextChar();
+  }
+
+  private final int _skipColon() throws JacksonException {
+    if ((_inputPtr + 4) >= _inputEnd) {
+      return _skipColon2(false);
+    }
+    int i = _inputBuffer[_inputPtr];
+    if (i == INT_COLON) {
+      i = _inputBuffer[++_inputPtr];
+      if (i > INT_SPACE) {
+        if (i == INT_SLASH || i == INT_HASH) {
+          return _skipColon2(true);
+        }
+        ++_inputPtr;
+        return i;
+      }
+      if (i == INT_SPACE || i == INT_TAB) {
+        i = (int) _inputBuffer[++_inputPtr];
+        if (i > INT_SPACE) {
+          if (i == INT_SLASH || i == INT_HASH) {
+            return _skipColon2(true);
+          }
+          ++_inputPtr;
+          return i;
+        }
+      }
+      return _skipColon2(true);
+    }
+    if (i == INT_SPACE || i == INT_TAB) {
+      i = _inputBuffer[++_inputPtr];
+    }
+    if (i == INT_COLON) {
+      i = _inputBuffer[++_inputPtr];
+      if (i > INT_SPACE) {
+        if (i == INT_SLASH || i == INT_HASH) {
+          return _skipColon2(true);
+        }
+        ++_inputPtr;
+        return i;
+      }
+      if (i == INT_SPACE || i == INT_TAB) {
+        i = (int) _inputBuffer[++_inputPtr];
+        if (i > INT_SPACE) {
+          if (i == INT_SLASH || i == INT_HASH) {
+            return _skipColon2(true);
+          }
+          ++_inputPtr;
+          return i;
+        }
+      }
+      return _skipColon2(true);
+    }
+    return _skipColon2(false);
+  }
+
+  private final int _skipColon2(boolean gotColon) throws JacksonException {
+    while (_inputPtr < _inputEnd || _loadMore()) {
+      int i = _inputBuffer[_inputPtr++] & 0xFF;
+      if (i > INT_SPACE) {
+        if (i == INT_SLASH) {
+          _skipComment();
+          continue;
+        }
+        if (i == INT_HASH) {
+          if (_skipYAMLComment()) {
+            continue;
+          }
+        }
+        if (gotColon) {
+          return i;
+        }
+        if (i != INT_COLON) {
+          _reportUnexpectedChar(i, "was expecting a colon to separate property name and value");
+        }
+        gotColon = true;
+      } else {
+        if (i != INT_SPACE) {
+          if (i == INT_LF) {
+            ++_currInputRow;
+            _currInputRowStart = _inputPtr;
+          } else {
+            if (i == INT_CR) {
+              _skipCR();
+            } else {
+              if (i != INT_TAB) {
+                _throwInvalidSpace(i);
+              }
+            }
+          }
+        }
+      }
+    }
+    _reportInvalidEOF(" within/between " + _streamReadContext.typeDesc() + " entries", null);
+    return -1;
+  }
+
+  private final void _skipComment() throws JacksonException {
+    if (!isEnabled(JsonReadFeature.ALLOW_JAVA_COMMENTS)) {
+      _reportUnexpectedChar('/', "maybe a (non-standard) comment? (not recognized as one since Feature \'ALLOW_COMMENTS\' not enabled for parser)");
+    }
+    if (_inputPtr >= _inputEnd && !_loadMore()) {
+      _reportInvalidEOF(" in a comment", null);
+    }
+    int c = _inputBuffer[_inputPtr++] & 0xFF;
+    if (c == INT_SLASH) {
+      _skipLine();
+    } else {
+      if (c == INT_ASTERISK) {
+        _skipCComment();
+      } else {
+        _reportUnexpectedChar(c, "was expecting either \'*\' or \'/\' for a comment");
+      }
+    }
+  }
+
+  private final void _skipCComment() throws JacksonException {
+    final int[] codes = CharTypes.getInputCodeComment();
+    main_loop:
+    while ((_inputPtr < _inputEnd) || _loadMore()) {
+      int i = (int) _inputBuffer[_inputPtr++] & 0xFF;
+      int code = codes[i];
+      if (code != 0) {
+        switch (code) {
+          case '*':
+          if (_inputPtr >= _inputEnd && !_loadMore()) {
+            break main_loop;
+          }
+          if (_inputBuffer[_inputPtr] == INT_SLASH) {
+            ++_inputPtr;
+            return;
+          }
+          break;
+          case INT_LF:
+          ++_currInputRow;
+          _currInputRowStart = _inputPtr;
+          break;
+          case INT_CR:
+          _skipCR();
+          break;
+          case 2:
+          _skipUtf8_2();
+          break;
+          case 3:
+          _skipUtf8_3();
+          break;
+          case 4:
+          _skipUtf8_4(i);
+          break;
+          default:
+          _reportInvalidChar(i);
+        }
+      }
+    }
+    _reportInvalidEOF(" in a comment", null);
+  }
+
+  private final boolean _skipYAMLComment() throws JacksonException {
+    if (!isEnabled(JsonReadFeature.ALLOW_YAML_COMMENTS)) {
+      return false;
+    }
+    _skipLine();
+    return true;
+  }
+
+  private final void _skipLine() throws JacksonException {
+    final int[] codes = CharTypes.getInputCodeComment();
+    while ((_inputPtr < _inputEnd) || _loadMore()) {
+      int i = (int) _inputBuffer[_inputPtr++] & 0xFF;
+      int code = codes[i];
+      if (code != 0) {
+        switch (code) {
+          case INT_LF:
+          ++_currInputRow;
+          _currInputRowStart = _inputPtr;
+          return;
+          case INT_CR:
+          _skipCR();
+          return;
+          case '*':
+          break;
+          case 2:
+          _skipUtf8_2();
+          break;
+          case 3:
+          _skipUtf8_3();
+          break;
+          case 4:
+          _skipUtf8_4(i);
+          break;
+          default:
+          if (code < 0) {
+            _reportInvalidChar(i);
+          }
+        }
+      }
+    }
+  }
+
+  @Override protected char _decodeEscaped() throws JacksonException {
+    if (_inputPtr >= _inputEnd) {
+      if (!_loadMore()) {
+        _reportInvalidEOF(" in character escape sequence", JsonToken.VALUE_STRING);
+      }
+    }
+    int c = (int) _inputBuffer[_inputPtr++];
+    switch (c) {
+      case 'b':
+      return '\b';
+      case 't':
+      return '\t';
+      case 'n':
+      return '\n';
+      case 'f':
+      return '\f';
+      case 'r':
+      return '\r';
+      case '\"':
+      case '/':
+      case '\\':
+      return (char) c;
+      case 'u':
+      break;
+      default:
+      return _handleUnrecognizedCharacterEscape((char) _decodeCharForError(c));
+    }
+    int value = 0;
+    for (int i = 0; i < 4; ++i) {
+      if (_inputPtr >= _inputEnd) {
+        if (!_loadMore()) {
+          _reportInvalidEOF(" in character escape sequence", JsonToken.VALUE_STRING);
+        }
+      }
+      int ch = _inputBuffer[_inputPtr++];
+      int digit = CharTypes.charToHex(ch);
+      if (digit < 0) {
+        _reportUnexpectedChar(ch & 0xFF, "expected a hex-digit for character escape sequence");
+      }
+      value = (value << 4) | digit;
+    }
+    return (char) value;
+  }
+
+  protected int _decodeCharForError(int firstByte) throws JacksonException {
+    int c = firstByte & 0xFF;
+    if (c > 0x7F) {
+      int needed;
+      if ((c & 0xE0) == 0xC0) {
+        c &= 0x1F;
+        needed = 1;
+      } else {
+        if ((c & 0xF0) == 0xE0) {
+          c &= 0x0F;
+          needed = 2;
+        } else {
+          if ((c & 0xF8) == 0xF0) {
+            c &= 0x07;
+            needed = 3;
+          } else {
+            _reportInvalidInitial(c & 0xFF);
+            needed = 1;
+          }
+        }
+      }
+      int d = nextByte();
+      if ((d & 0xC0) != 0x080) {
+        _reportInvalidOther(d & 0xFF);
+      }
+      c = (c << 6) | (d & 0x3F);
+      if (needed > 1) {
+        d = nextByte();
+        if ((d & 0xC0) != 0x080) {
+          _reportInvalidOther(d & 0xFF);
+        }
+        c = (c << 6) | (d & 0x3F);
+        if (needed > 2) {
+          d = nextByte();
+          if ((d & 0xC0) != 0x080) {
+            _reportInvalidOther(d & 0xFF);
+          }
+          c = (c << 6) | (d & 0x3F);
+        }
+      }
+    }
+    return c;
+  }
+
+  private final int _decodeUtf8_2(int c) throws JacksonException {
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    int d = (int) _inputBuffer[_inputPtr++];
+    if ((d & 0xC0) != 0x080) {
+      _reportInvalidOther(d & 0xFF, _inputPtr);
+    }
+    return ((c & 0x1F) << 6) | (d & 0x3F);
+  }
+
+  private final int _decodeUtf8_3(int c1) throws JacksonException {
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    c1 &= 0x0F;
+    int d = (int) _inputBuffer[_inputPtr++];
+    if ((d & 0xC0) != 0x080) {
+      _reportInvalidOther(d & 0xFF, _inputPtr);
+    }
+    int c = (c1 << 6) | (d & 0x3F);
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    d = (int) _inputBuffer[_inputPtr++];
+    if ((d & 0xC0) != 0x080) {
+      _reportInvalidOther(d & 0xFF, _inputPtr);
+    }
+    c = (c << 6) | (d & 0x3F);
+    return c;
+  }
+
+  private final int _decodeUtf8_3fast(int c1) throws JacksonException {
+    c1 &= 0x0F;
+    int d = (int) _inputBuffer[_inputPtr++];
+    if ((d & 0xC0) != 0x080) {
+      _reportInvalidOther(d & 0xFF, _inputPtr);
+    }
+    int c = (c1 << 6) | (d & 0x3F);
+    d = (int) _inputBuffer[_inputPtr++];
+    if ((d & 0xC0) != 0x080) {
+      _reportInvalidOther(d & 0xFF, _inputPtr);
+    }
+    c = (c << 6) | (d & 0x3F);
+    return c;
+  }
+
+  private final int _decodeUtf8_4(int c) throws JacksonException {
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    int d = (int) _inputBuffer[_inputPtr++];
+    if ((d & 0xC0) != 0x080) {
+      _reportInvalidOther(d & 0xFF, _inputPtr);
+    }
+    c = ((c & 0x07) << 6) | (d & 0x3F);
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    d = (int) _inputBuffer[_inputPtr++];
+    if ((d & 0xC0) != 0x080) {
+      _reportInvalidOther(d & 0xFF, _inputPtr);
+    }
+    c = (c << 6) | (d & 0x3F);
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    d = (int) _inputBuffer[_inputPtr++];
+    if ((d & 0xC0) != 0x080) {
+      _reportInvalidOther(d & 0xFF, _inputPtr);
+    }
+    return ((c << 6) | (d & 0x3F)) - 0x10000;
+  }
+
+  private final void _skipUtf8_2() throws JacksonException {
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    int c = (int) _inputBuffer[_inputPtr++];
+    if ((c & 0xC0) != 0x080) {
+      _reportInvalidOther(c & 0xFF, _inputPtr);
+    }
+  }
+
+  private final void _skipUtf8_3() throws JacksonException {
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    int c = (int) _inputBuffer[_inputPtr++];
+    if ((c & 0xC0) != 0x080) {
+      _reportInvalidOther(c & 0xFF, _inputPtr);
+    }
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    c = (int) _inputBuffer[_inputPtr++];
+    if ((c & 0xC0) != 0x080) {
+      _reportInvalidOther(c & 0xFF, _inputPtr);
+    }
+  }
+
+  private final void _skipUtf8_4(int c) throws JacksonException {
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    int d = (int) _inputBuffer[_inputPtr++];
+    if ((d & 0xC0) != 0x080) {
+      _reportInvalidOther(d & 0xFF, _inputPtr);
+    }
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    d = (int) _inputBuffer[_inputPtr++];
+    if ((d & 0xC0) != 0x080) {
+      _reportInvalidOther(d & 0xFF, _inputPtr);
+    }
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    d = (int) _inputBuffer[_inputPtr++];
+    if ((d & 0xC0) != 0x080) {
+      _reportInvalidOther(d & 0xFF, _inputPtr);
+    }
+  }
+
+  protected final void _skipCR() throws JacksonException {
+    if (_inputPtr < _inputEnd || _loadMore()) {
+      if (_inputBuffer[_inputPtr] == BYTE_LF) {
+        ++_inputPtr;
+      }
+    }
+    ++_currInputRow;
+    _currInputRowStart = _inputPtr;
+  }
+
+  private int nextByte() throws JacksonException {
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    return _inputBuffer[_inputPtr++] & 0xFF;
+  }
+
+  protected void _reportInvalidToken(String matchedPart, int ptr) throws JacksonException {
+    _inputPtr = ptr;
+    _reportInvalidToken(matchedPart, _validJsonTokenList());
+  }
+
+  protected void _reportInvalidToken(String matchedPart) throws JacksonException {
+    _reportInvalidToken(matchedPart, _validJsonTokenList());
+  }
+
+  protected void _reportInvalidToken(String matchedPart, String msg) throws JacksonException {
+    StringBuilder sb = new StringBuilder(matchedPart);
+    while ((_inputPtr < _inputEnd) || _loadMore()) {
+      int i = (int) _inputBuffer[_inputPtr++];
+      char c = (char) _decodeCharForError(i);
+      if (!Character.isJavaIdentifierPart(c)) {
+        break;
+      }
+      sb.append(c);
+      if (sb.length() >= MAX_ERROR_TOKEN_LENGTH) {
+        sb.append("...");
+        break;
+      }
+    }
+    _reportError("Unrecognized token \'%s\': was expecting %s", sb, msg);
+  }
+
+  protected void _reportInvalidChar(int c) throws StreamReadException {
+    if (c < INT_SPACE) {
+      _throwInvalidSpace(c);
+    }
+    _reportInvalidInitial(c);
+  }
+
+  protected void _reportInvalidInitial(int mask) throws StreamReadException {
+    _reportError("Invalid UTF-8 start byte 0x" + Integer.toHexString(mask));
+  }
+
+  protected void _reportInvalidOther(int mask) throws StreamReadException {
+    _reportError("Invalid UTF-8 middle byte 0x" + Integer.toHexString(mask));
+  }
+
+  protected void _reportInvalidOther(int mask, int ptr) throws StreamReadException {
+    _inputPtr = ptr;
+    _reportInvalidOther(mask);
+  }
+
+  /**
+     * Efficient handling for incremental parsing of base64-encoded
+     * textual content.
+     *
+     * @param b64variant Type of base64 encoding expected in context
+     *
+     * @return Fully decoded value of base64 content
+     *
+     * @throws WrappedIOException for low-level read issues
+     * @throws StreamReadException for decoding problems (invalid content)
+     */
+  @SuppressWarnings(value = { "resource" }) protected final byte[] _decodeBase64(Base64Variant b64variant) throws JacksonException {
+    ByteArrayBuilder builder = _getByteArrayBuilder();
+    while (true) {
+      int ch;
+      do {
+        if (_inputPtr >= _inputEnd) {
+          _loadMoreGuaranteed();
+        }
+        ch = (int) _inputBuffer[_inputPtr++] & 0xFF;
+      } while(ch <= INT_SPACE);
+      int bits = b64variant.decodeBase64Char(ch);
+      if (bits < 0) {
+        if (ch == INT_QUOTE) {
+          return builder.toByteArray();
+        }
+        bits = _decodeBase64Escape(b64variant, ch, 0);
+        if (bits < 0) {
+          continue;
+        }
+      }
+      int decodedData = bits;
+      if (_inputPtr >= _inputEnd) {
+        _loadMoreGuaranteed();
+      }
+      ch = _inputBuffer[_inputPtr++] & 0xFF;
+      bits = b64variant.decodeBase64Char(ch);
+      if (bits < 0) {
+        bits = _decodeBase64Escape(b64variant, ch, 1);
+      }
+      decodedData = (decodedData << 6) | bits;
+      if (_inputPtr >= _inputEnd) {
+        _loadMoreGuaranteed();
+      }
+      ch = _inputBuffer[_inputPtr++] & 0xFF;
+      bits = b64variant.decodeBase64Char(ch);
+      if (bits < 0) {
+        if (bits != Base64Variant.BASE64_VALUE_PADDING) {
+          if (ch == INT_QUOTE) {
+            decodedData >>= 4;
+            builder.append(decodedData);
+            if (b64variant.usesPadding()) {
+              --_inputPtr;
+              _handleBase64MissingPadding(b64variant);
+            }
+            return builder.toByteArray();
+          }
+          bits = _decodeBase64Escape(b64variant, ch, 2);
+        }
+        if (bits == Base64Variant.BASE64_VALUE_PADDING) {
+          if (_inputPtr >= _inputEnd) {
+            _loadMoreGuaranteed();
+          }
+          ch = _inputBuffer[_inputPtr++] & 0xFF;
+          if (!b64variant.usesPaddingChar(ch)) {
+            if (_decodeBase64Escape(b64variant, ch, 3) != Base64Variant.BASE64_VALUE_PADDING) {
+              _reportInvalidBase64Char(b64variant, ch, 3, "expected padding character \'" + b64variant.getPaddingChar() + "\'");
+            }
+          }
+          decodedData >>= 4;
+          builder.append(decodedData);
+          continue;
+        }
+      }
+      decodedData = (decodedData << 6) | bits;
+      if (_inputPtr >= _inputEnd) {
+        _loadMoreGuaranteed();
+      }
+      ch = _inputBuffer[_inputPtr++] & 0xFF;
+      bits = b64variant.decodeBase64Char(ch);
+      if (bits < 0) {
+        if (bits != Base64Variant.BASE64_VALUE_PADDING) {
+          if (ch == INT_QUOTE) {
+            decodedData >>= 2;
+            builder.appendTwoBytes(decodedData);
+            if (b64variant.usesPadding()) {
+              --_inputPtr;
+              _handleBase64MissingPadding(b64variant);
+            }
+            return builder.toByteArray();
+          }
+          bits = _decodeBase64Escape(b64variant, ch, 3);
+        }
+        if (bits == Base64Variant.BASE64_VALUE_PADDING) {
+          decodedData >>= 2;
+          builder.appendTwoBytes(decodedData);
+          continue;
+        }
+      }
+      decodedData = (decodedData << 6) | bits;
+      builder.appendThreeBytes(decodedData);
+    }
+  }
+
+  @Override public JsonLocation currentTokenLocation() {
+    if (_currToken == JsonToken.PROPERTY_NAME) {
+      long total = _currInputProcessed + (_nameStartOffset - 1);
+      return new JsonLocation(_contentReference(), total, -1L, _nameStartRow, _nameStartCol);
+    }
+    return new JsonLocation(_contentReference(), _tokenInputTotal - 1, -1L, _tokenInputRow, _tokenInputCol);
+  }
+
+  @Override public JsonLocation currentLocation() {
+    int col = _inputPtr - _currInputRowStart + 1;
+    return new JsonLocation(_contentReference(), _currInputProcessed + _inputPtr, -1L, _currInputRow, col);
+  }
+
+  private final void _updateLocation() {
+    _tokenInputRow = _currInputRow;
+    final int ptr = _inputPtr;
+    _tokenInputTotal = _currInputProcessed + ptr;
+    _tokenInputCol = ptr - _currInputRowStart;
+  }
+
+  private final void _updateNameLocation() {
+    _nameStartRow = _currInputRow;
+    final int ptr = _inputPtr;
+    _nameStartOffset = ptr;
+    _nameStartCol = ptr - _currInputRowStart;
+  }
+
+  private final JsonToken _closeScope(int i) throws StreamReadException {
+    if (i == INT_RCURLY) {
+      _closeObjectScope();
+      return (_currToken = JsonToken.END_OBJECT);
+    }
+    _closeArrayScope();
+    return (_currToken = JsonToken.END_ARRAY);
+  }
+
+  private final void _closeArrayScope() throws StreamReadException {
+    _updateLocation();
+    if (!_streamReadContext.inArray()) {
+      _reportMismatchedEndMarker(']', '}');
+    }
+    _streamReadContext = _streamReadContext.clearAndGetParent();
+  }
+
+  private final void _closeObjectScope() throws StreamReadException {
+    _updateLocation();
+    if (!_streamReadContext.inObject()) {
+      _reportMismatchedEndMarker('}', ']');
+    }
+    _streamReadContext = _streamReadContext.clearAndGetParent();
+  }
+
+
+<<<<<<< Unknown file: This is a bug in JDime.
+=======
+  @Override public String nextFieldName() throws IOException {
+    _numTypesValid = NR_UNKNOWN;
+    if (_currToken == JsonToken.FIELD_NAME) {
+      _nextAfterName();
+      return null;
+    }
+    if (_tokenIncomplete) {
+      _skipString();
+    }
+    int i = _skipWSOrEnd();
+    if (i < 0) {
+      close();
+      _currToken = null;
+      return null;
+    }
+    _binaryValue = null;
+    if (i == INT_RBRACKET) {
+      _closeArrayScope();
+      _currToken = JsonToken.END_ARRAY;
+      return null;
+    }
+    if (i == INT_RCURLY) {
+      _closeObjectScope();
+      _currToken = JsonToken.END_OBJECT;
+      return null;
+    }
+    if (_parsingContext.expectComma()) {
+      if (i != INT_COMMA) {
+        _reportUnexpectedChar(i, "was expecting comma to separate " + _parsingContext.typeDesc() + " entries");
+      }
+      i = _skipWS();
+      if ((_features & FEAT_MASK_TRAILING_COMMA) != 0) {
+        if ((i == INT_RBRACKET) || (i == INT_RCURLY)) {
+          _closeScope(i);
+          return null;
+        }
+      }
+    }
+    if (!_parsingContext.inObject()) {
+      _updateLocation();
+      _nextTokenNotInObject(i);
+      return null;
+    }
+    _updateNameLocation();
+    final String nameStr = _parseName(i);
+    _parsingContext.setCurrentName(nameStr);
+    _currToken = JsonToken.FIELD_NAME;
+    i = _skipColon();
+    _updateLocation();
+    if (i == INT_QUOTE) {
+      _tokenIncomplete = true;
+      _nextToken = JsonToken.VALUE_STRING;
+      return nameStr;
+    }
+    JsonToken t;
+    switch (i) {
+      case '-':
+      t = _parseSignedNumber(true);
+      break;
+      case '+':
+      if (isEnabled(JsonReadFeature.ALLOW_LEADING_PLUS_SIGN_FOR_NUMBERS.mappedFeature())) {
+        t = _parseSignedNumber(false);
+      } else {
+        t = _handleUnexpectedValue(i);
+      }
+      break;
+      case '.':
+      t = _parseFloatThatStartsWithPeriod();
+      break;
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      t = _parsePosNumber(i);
+      break;
+      case 'f':
+      _matchFalse();
+      t = JsonToken.VALUE_FALSE;
+      break;
+      case 'n':
+      _matchNull();
+      t = JsonToken.VALUE_NULL;
+      break;
+      case 't':
+      _matchTrue();
+      t = JsonToken.VALUE_TRUE;
+      break;
+      case '[':
+      t = JsonToken.START_ARRAY;
+      break;
+      case '{':
+      t = JsonToken.START_OBJECT;
+      break;
+      default:
+      t = _handleUnexpectedValue(i);
+    }
+    _nextToken = t;
+    return nameStr;
+  }
+>>>>>>> commits-rmx_100/FasterXML/jackson-core/fb1d64c983dc49f012fd7f91f1312184089053be/UTF8StreamJsonParser-b749693.java
+
+
+  private final JsonToken _parseSignedNumber(boolean negative) throws IOException {
+    char[] outBuf = _textBuffer.emptyAndGetCurrentSegment();
+    int outPtr = 0;
+    if (negative) {
+      outBuf[outPtr++] = '-';
+    }
+    if (_inputPtr >= _inputEnd) {
+      _loadMoreGuaranteed();
+    }
+    int c = (int) _inputBuffer[_inputPtr++] & 0xFF;
+    if (c <= INT_0) {
+      if (c != INT_0) {
+        if (c == INT_PERIOD) {
+          return _parseFloatThatStartsWithPeriod();
+        }
+        return _handleInvalidNumberStart(c, negative, true);
+      }
+      c = _verifyNoLeadingZeroes();
+    } else {
+      if (c > INT_9) {
+        return _handleInvalidNumberStart(c, negative, true);
+      }
+    }
+    outBuf[outPtr++] = (char) c;
+    int intLen = 1;
+    final int end = Math.min(_inputEnd, _inputPtr + outBuf.length - outPtr);
+    while (true) {
+      if (_inputPtr >= end) {
+        return _parseNumber2(outBuf, outPtr, negative, intLen);
+      }
+      c = (int) _inputBuffer[_inputPtr++] & 0xFF;
+      if (c < INT_0 || c > INT_9) {
+        break;
+      }
+      ++intLen;
+      outBuf[outPtr++] = (char) c;
+    }
+    if (c == INT_PERIOD || c == INT_e || c == INT_E) {
+      return _parseFloat(outBuf, outPtr, c, negative, intLen);
+    }
+    --_inputPtr;
+    _textBuffer.setCurrentLength(outPtr);
+    if (_parsingContext.inRoot()) {
+      _verifyRootSpace(c);
+    }
+    return resetInt(negative, intLen);
+  }
+
+  protected JsonToken _handleInvalidNumberStart(int ch, final boolean neg) throws IOException {
+    return _handleInvalidNumberStart(ch, neg, false);
+  }
+}

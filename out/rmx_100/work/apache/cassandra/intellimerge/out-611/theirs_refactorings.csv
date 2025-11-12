@@ -1,0 +1,5 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.86;185-210;org.apache.cassandra.db.compaction.CompactionManager.BackgroundCompactionTask.run();177-202;org.apache.cassandra.db.compaction.CompactionManager.BackgroundCompactionCandidate.run()
+Inline Method;method;0.64;129-156;org.apache.cassandra.db.compaction.CompactionManager.submitBackground(ColumnFamilyStore);134-164;org.apache.cassandra.db.compaction.CompactionManager.submitBackground(ColumnFamilyStore, boolean)
+Change Field Signature;field;1.0;178-178;org.apache.cassandra.db.compaction.CompactionManager.BackgroundCompactionTask.cfs;170-170;org.apache.cassandra.db.compaction.CompactionManager.BackgroundCompactionCandidate.cfs
+Change Constructor Signature;constructor;0.68;180-183;org.apache.cassandra.db.compaction.CompactionManager.BackgroundCompactionTask.BackgroundCompactionTask(ColumnFamilyStore);172-175;org.apache.cassandra.db.compaction.CompactionManager.BackgroundCompactionCandidate.BackgroundCompactionCandidate(ColumnFamilyStore)

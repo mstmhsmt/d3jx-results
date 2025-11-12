@@ -1,0 +1,5 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.83;263-265;liquibase.change.ConstraintsConfig.shouldValidate();293-295;liquibase.change.ConstraintsConfig.shouldValidateUnique()
+Change Method Signature;method;0.87;254-257;liquibase.change.ConstraintsConfig.setShouldValidate(String);284-287;liquibase.change.ConstraintsConfig.setShouldValidateUnique(String)
+Change Method Signature;method;0.82;267-270;liquibase.change.ConstraintsConfig.setShouldValidate(Boolean);297-300;liquibase.change.ConstraintsConfig.setShouldValidateUnique(Boolean)
+Change Field Signature;field;0.78;32-32;liquibase.change.ConstraintsConfig.validate;33-33;liquibase.change.ConstraintsConfig.validateUnique

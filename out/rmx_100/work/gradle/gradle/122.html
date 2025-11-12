@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html version="-//W3C//DTD XHTML 1.1//EN"
+      xmlns="http://www.w3.org/1999/xhtml"
+      xml:lang="en"
+      >
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>DiffViewer</title>
+<link rel="stylesheet" type="text/css" href="/js/codemirror/lib/codemirror.css"></link>
+<link rel="stylesheet" type="text/css" href="/js/codemirror/addon/dialog/dialog.css"></link>
+<link rel="stylesheet" type="text/css" href="/js/dv/diffviewer.css"></link>
+<link rel="stylesheet" type="text/css" href="/js/dv/dv.css"/>
+<script type="text/javascript" src="/js/jquery.min.js"></script>
+<script type="text/javascript" src="/js/codemirror/lib/codemirror.js"></script>
+<script type="text/javascript" src="/js/codemirror/addon/scroll/simplescrollbars.js"></script>
+<script type="text/javascript" src="/js/codemirror/addon/scroll/annotatescrollbar.js"></script>
+<script type="text/javascript" src="/js/codemirror/addon/dialog/dialog.js"></script>
+<script type="text/javascript" src="/js/codemirror/addon/search/searchcursor.js"></script>
+<script type="text/javascript" src="/js/codemirror/addon/search/search.js"></script>
+<script type="text/javascript" src="/js/codemirror/addon/fold/foldcode.js"></script>
+<script type="text/javascript" src="/js/codemirror/addon/fold/foldgutter.js"></script>
+<script type="text/javascript" src="/js/codemirror/addon/fold/brace-fold.js"></script>
+<script type="text/javascript" src="/js/codemirror/addon/fold/comment-fold.js"></script>
+<script type="text/javascript" src="/js/codemirror/addon/fold/indent-fold.js"></script>
+<script type="text/javascript" src="/js/codemirror/mode/python/python.js"></script>
+<script type="text/javascript" src="/js/codemirror/mode/verilog/verilog.js"></script>
+<script type="text/javascript" src="/js/codemirror/mode/clike/clike.js"></script>
+<script type="text/javascript" src="/js/common.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
+<script type="text/javascript" src="/js/dv/diffviewer3.js"></script>
+<script type="text/javascript" src="/js/dv/dv3.js"></script>
+<script type="text/javascript">
+var dv = new DiffViewer();
+</script>
+</head>
+
+<body>
+
+<div id="head">
+<table border="0" cellspacing="0" cellpadding="2">
+<tr><td>Modified0:</td><td>commits-rmx_100/gradle/gradle/cf5d03e9cf13a33811b66e183119bf81090812bc/GradleExecutor-489065e.java</td></tr>
+<tr><td>Original:</td><td>commits-rmx_100/gradle/gradle/abc791b0f9d17c562e86db289b826194715b4825/GradleExecutor-68c450d.java</td></tr>
+<tr><td>Modified1:</td><td>commits-rmx_100/gradle/gradle/c77c1f5376563b5a683f245708bf8e47edb7ac1f/GradleExecutor-3e5e039.java</td></tr>
+</table>
+<table align="center" border="0" cellspacing="0" cellpadding="2">
+<tr><td><div>
+<form><input type="button" value="AST Diff" onClick="dv.toggleDts();"/></form>
+</div></td><td><div>
+<form><input type="button" value="Diff" onClick="dv.toggleDifferences();"/></form>
+</div></td></tr>
+</table>
+</div>
+
+<div id="view"></div>
+
+<div id="tail">
+<table>
+<tr>
+<td width="100%"><span id="legend"></span></td>
+<td><div>
+<form><input type="button" value="Close" onClick="javascript:window.close();"/></form>
+</div></td>
+</tr>
+</table>
+</div>
+
+<script type="text/javascript">
+$(document).ready(function(){
+var urlb = "/commits-rmx_100/gradle/gradle/abc791b0f9d17c562e86db289b826194715b4825/GradleExecutor-68c450d.java";
+var url0 = "/commits-rmx_100/gradle/gradle/cf5d03e9cf13a33811b66e183119bf81090812bc/GradleExecutor-489065e.java";
+var url1 = "/commits-rmx_100/gradle/gradle/c77c1f5376563b5a683f245708bf8e47edb7ac1f/GradleExecutor-3e5e039.java";
+var urld0 = "/out/rmx_100/work/CACHE/54/54ab5f068b7453c986e27c297a88b0fc-5dcc87d69ce459fb945f53452401eab9/ForkPoolWorker-5/diff.json";
+var urld1 = "/out/rmx_100/work/CACHE/54/54ab5f068b7453c986e27c297a88b0fc-1f82819ee7c7c59fb2cbbff08ce68ce7/ForkPoolWorker-5/diff.json";
+var lang = getLang(urlb);
+var view = document.getElementById("view");
+dv.dts = 3;
+dv.show(urlb, url0, url1, urld0, urld1, view, lang, 0, 0, 0);
+})
+</script>
+
+</body></html>

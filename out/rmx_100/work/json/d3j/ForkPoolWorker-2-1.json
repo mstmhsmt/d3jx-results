@@ -1,0 +1,1 @@
+{"https://github.com/apache/cassandra": [{"hunk_count": 332, "hunk_conflict_count": 1, "conflict_stat": {"delete-insert": 1}, "time": 36.61585235595703, "parsable_merge": true, "effort": 370, "similarity": 0.9937685260037725, "distance": 0.012541097515506897, "effort2": 270, "similarity2": 0.9923003528080414, "distance2": 0.012033694344163659, "id": 62}]}

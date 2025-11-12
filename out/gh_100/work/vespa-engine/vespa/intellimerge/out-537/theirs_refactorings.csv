@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.87;340-347;com.yahoo.vespa.hosted.provision.autoscale.AutoscalingTester.MockHostProvisioner.matches(Flavor, NodeResources);305-313;com.yahoo.vespa.hosted.provision.autoscale.AutoscalingTester.MockHostProvisioner.compatible(Flavor, NodeResources)

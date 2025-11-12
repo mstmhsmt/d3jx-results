@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.96;80-87;org.elasticsearch.search.aggregations.metrics.min.InternalMin.reduce(ReduceContext);82-89;org.elasticsearch.search.aggregations.metrics.min.InternalMin.doReduce(ReduceContext)
+Change Constructor Signature;constructor;0.96;59-63;org.elasticsearch.search.aggregations.metrics.min.InternalMin.InternalMin(String, double, ValueFormatter, Map);61-65;org.elasticsearch.search.aggregations.metrics.min.InternalMin.InternalMin(String, double, ValueFormatter, List, Map)

@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.76;152-172;org.apache.cassandra.net.OutboundTcpConnection.writeConnected(Message, String);153-194;org.apache.cassandra.net.OutboundTcpConnection.writeConnected(Entry, String)
+Change Constructor Signature;constructor;0.89;292-297;org.apache.cassandra.net.OutboundTcpConnection.Entry.Entry(Message, String, long);315-320;org.apache.cassandra.net.OutboundTcpConnection.Entry.Entry(Message, String)

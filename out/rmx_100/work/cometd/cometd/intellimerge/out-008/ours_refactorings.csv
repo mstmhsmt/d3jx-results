@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.63;43-45;org.cometd.javascript.Latch.jsFunction_countDown();37-39;org.cometd.javascript.Latch.countDown()

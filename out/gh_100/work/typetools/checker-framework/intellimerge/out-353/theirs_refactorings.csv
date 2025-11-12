@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.8;179-217;checkers.basetype.BaseTypeChecker.createQualifierHierarchy();231-270;checkers.basetype.BaseTypeChecker.createQualifierHierarchy(Elements, Set, MultiGraphFactory)

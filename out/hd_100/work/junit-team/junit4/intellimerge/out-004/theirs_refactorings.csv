@@ -1,0 +1,4 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Inline Method;method;0.59;64-72;org.junit.runners.BlockJUnit4ClassRunner.runChild(FrameworkMethod, RunNotifier);75-87;org.junit.runners.BlockJUnit4ClassRunner.runNotIgnored(FrameworkMethod, EachTestNotifier)
+Inline Method;method;0.64;64-72;org.junit.runners.BlockJUnit4ClassRunner.runChild(FrameworkMethod, RunNotifier);89-91;org.junit.runners.BlockJUnit4ClassRunner.runIgnored(EachTestNotifier)
+Inline Method;method;0.7;64-72;org.junit.runners.BlockJUnit4ClassRunner.runChild(FrameworkMethod, RunNotifier);393-397;org.junit.runners.BlockJUnit4ClassRunner.makeNotifier(FrameworkMethod, RunNotifier)

@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.87;142-226;org.antlr.v4.runtime.atn.LL1Analyzer._LOOK(ATNState, PredictionContext, IntervalSet, Set, BitSet, boolean, boolean);166-262;org.antlr.v4.runtime.atn.LL1Analyzer._LOOK(ATNState, ATNState, PredictionContext, IntervalSet, Set, BitSet, boolean, boolean)

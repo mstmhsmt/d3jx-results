@@ -1,0 +1,253 @@
+package bisq.core.app;
+import bisq.core.btc.setup.WalletsSetup;
+import bisq.core.btc.wallet.BsqWalletService;
+import bisq.core.btc.wallet.BtcWalletService;
+import bisq.core.dao.DaoSetup;
+import bisq.core.offer.OpenOfferManager;
+import bisq.core.setup.CorePersistedDataHost;
+import bisq.core.setup.CoreSetup;
+import bisq.core.support.dispute.arbitration.arbitrator.ArbitratorManager;
+import bisq.core.trade.statistics.TradeStatisticsManager;
+import bisq.core.trade.txproof.xmr.XmrTxProofService;
+import bisq.network.p2p.P2PService;
+import bisq.common.UserThread;
+import bisq.common.app.AppModule;
+import bisq.common.config.BisqHelpFormatter;
+import bisq.common.config.Config;
+import bisq.common.config.ConfigException;
+import bisq.common.handlers.ResultHandler;
+import bisq.common.persistence.PersistenceManager;
+import bisq.common.proto.persistable.PersistedDataHost;
+import bisq.common.setup.CommonSetup;
+import bisq.common.setup.GracefulShutDownHandler;
+import bisq.common.setup.UncaughtExceptionHandler;
+import bisq.common.util.Utilities;
+import com.google.inject.Guice;
+import com.google.inject.Injector;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import lombok.extern.slf4j.Slf4j;
+import javax.annotation.Nullable;
+
+@Slf4j public abstract class BisqExecutable implements GracefulShutDownHandler, BisqSetup.BisqSetupListener, UncaughtExceptionHandler {
+  public static final int EXIT_SUCCESS = 0;
+
+  public static final int EXIT_FAILURE = 1;
+
+  private final String fullName;
+
+  private final String scriptName;
+
+  private final String appName;
+
+  private final String version;
+
+  protected Injector injector;
+
+  protected AppModule module;
+
+  protected Config config;
+
+  private boolean isShutdownInProgress;
+
+  public BisqExecutable(String fullName, String scriptName, String appName, String version) {
+    this.fullName = fullName;
+    this.scriptName = scriptName;
+    this.appName = appName;
+    this.version = version;
+  }
+
+  public void execute(String[] args) {
+    try {
+      config = new Config(appName, Utilities.getUserDataDir(), args);
+      if (config.helpRequested) {
+        config.printHelp(System.out, new BisqHelpFormatter(fullName, scriptName, version));
+        System.exit(EXIT_SUCCESS);
+      }
+    } catch (ConfigException ex) {
+      System.err.println("error: " + ex.getMessage());
+      System.exit(EXIT_FAILURE);
+    } catch (Throwable ex) {
+      System.err.println("fault: An unexpected error occurred. " + "Please file a report at https://bisq.network/issues");
+      ex.printStackTrace(System.err);
+      System.exit(EXIT_FAILURE);
+    }
+    doExecute();
+  }
+
+  protected void doExecute() {
+    CommonSetup.setup(config, this);
+    CoreSetup.setup(config);
+    addCapabilities();
+    launchApplication();
+  }
+
+  protected abstract void configUserThread();
+
+  protected void addCapabilities() {
+  }
+
+  protected abstract void launchApplication();
+
+  protected void onApplicationLaunched() {
+    configUserThread();
+    CommonSetup.printSystemLoadPeriodically(10);
+    CommonSetup.setupUncaughtExceptionHandler(this);
+    setupGuice();
+    setupAvoidStandbyMode();
+    hasDowngraded = BisqSetup.hasDowngraded();
+    if (hasDowngraded) {
+      startApplication();
+    } else {
+      readAllPersisted(this::startApplication);
+    }
+  }
+
+  protected void setupGuice() {
+    module = getModule();
+    injector = getInjector();
+    applyInjector();
+  }
+
+  protected abstract AppModule getModule();
+
+  protected Injector getInjector() {
+    return Guice.createInjector(module);
+  }
+
+  protected void applyInjector() {
+  }
+
+  protected void readAllPersisted(Runnable completeHandler) {
+    readAllPersisted(null, completeHandler);
+  }
+
+  protected void readAllPersisted(@Nullable List<PersistedDataHost> additionalHosts, Runnable completeHandler) {
+    List<PersistedDataHost> hosts = CorePersistedDataHost.getPersistedDataHosts(injector);
+    if (additionalHosts != null) {
+      hosts.addAll(additionalHosts);
+    }
+    AtomicInteger remaining = new AtomicInteger(hosts.size());
+    hosts.forEach((host) -> {
+      host.readPersisted(() -> {
+        if (remaining.decrementAndGet() == 0) {
+          UserThread.execute(completeHandler);
+        }
+      });
+    });
+  }
+
+  protected void setupAvoidStandbyMode() {
+  }
+
+  protected abstract void startApplication();
+
+  protected void onApplicationStarted() {
+    runBisqSetup();
+  }
+
+  protected void runBisqSetup() {
+    BisqSetup bisqSetup = injector.getInstance(BisqSetup.class);
+    bisqSetup.addBisqSetupListener(this);
+    bisqSetup.start();
+  }
+
+  public abstract void onSetupComplete();
+
+  @Override public void gracefulShutDown(ResultHandler resultHandler) {
+    log.info("Start graceful shutDown");
+    if (isShutdownInProgress) {
+      return;
+    }
+    isShutdownInProgress = true;
+    if (injector == null) {
+      log.info("Shut down called before injector was created");
+      resultHandler.handleResult();
+      System.exit(EXIT_SUCCESS);
+    }
+    try {
+      injector.getInstance(ArbitratorManager.class).shutDown();
+      injector.getInstance(TradeStatisticsManager.class).shutDown();
+      injector.getInstance(XmrTxProofService.class).shutDown();
+      injector.getInstance(DaoSetup.class).shutDown();
+      injector.getInstance(AvoidStandbyModeService.class).shutDown();
+      injector.getInstance(OpenOfferManager.class).shutDown(() -> {
+        log.info("OpenOfferManager shutdown completed");
+        injector.getInstance(BtcWalletService.class).shutDown();
+        injector.getInstance(BsqWalletService.class).shutDown();
+        WalletsSetup walletsSetup = injector.getInstance(WalletsSetup.class);
+        walletsSetup.shutDownComplete.addListener((ov, o, n) -> {
+          log.info("WalletsSetup shutdown completed");
+          injector.getInstance(P2PService.class).shutDown(() -> {
+            log.info("P2PService shutdown completed");
+            module.close(injector);
+
+            PersistenceManager.flushAllDataToDisk(() -> {
+              log.info("Graceful shutdown completed. Exiting now.");
+              resultHandler.handleResult();
+              UserThread.runAfter(() -> System.exit(EXIT_SUCCESS), 1);
+            });
+
+            if (!hasDowngraded) {
+              PersistenceManager.flushAllDataToDisk(() -> {
+                log.info("Graceful shutdown completed. Exiting now.");
+                resultHandler.handleResult();
+                System.exit(EXIT_SUCCESS);
+              });
+            } else {
+              System.exit(EXIT_SUCCESS);
+            }
+          });
+        });
+        walletsSetup.shutDown();
+      });
+      UserThread.runAfter(() -> {
+        log.warn("Timeout triggered resultHandler");
+
+        PersistenceManager.flushAllDataToDisk(() -> {
+          log.info("Graceful shutdown resulted in a timeout. Exiting now.");
+          resultHandler.handleResult();
+          UserThread.runAfter(() -> System.exit(EXIT_SUCCESS), 1);
+        });
+
+        if (!hasDowngraded) {
+          PersistenceManager.flushAllDataToDisk(() -> {
+            log.info("Graceful shutdown resulted in a timeout. Exiting now.");
+            resultHandler.handleResult();
+            System.exit(EXIT_SUCCESS);
+          });
+        } else {
+          System.exit(EXIT_SUCCESS);
+        }
+      }, 20);
+    } catch (Throwable t) {
+      log.error("App shutdown failed with exception {}", t.toString());
+      t.printStackTrace();
+
+      PersistenceManager.flushAllDataToDisk(() -> {
+        log.info("Graceful shutdown resulted in an error. Exiting now.");
+        resultHandler.handleResult();
+        UserThread.runAfter(() -> System.exit(EXIT_FAILURE), 1);
+      });
+
+      if (!hasDowngraded) {
+        PersistenceManager.flushAllDataToDisk(() -> {
+          log.info("Graceful shutdown resulted in an error. Exiting now.");
+          resultHandler.handleResult();
+          System.exit(EXIT_FAILURE);
+        });
+      } else {
+        System.exit(EXIT_FAILURE);
+      }
+    }
+  }
+
+  @Override public void handleUncaughtException(Throwable throwable, boolean doShutDown) {
+    log.error(throwable.toString());
+    if (doShutDown) {
+      gracefulShutDown(() -> log.info("gracefulShutDown complete"));
+    }
+  }
+
+  private boolean hasDowngraded;
+}

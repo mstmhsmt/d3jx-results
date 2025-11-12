@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.93;359-397;jadx.core.dex.visitors.ModVisitor.makeFilledArrayInsn(MethodNode, FillArrayNode);300-336;jadx.core.dex.visitors.ModVisitor.makeFilledArrayInsn(MethodNode, NewArrayNode, FillArrayNode)

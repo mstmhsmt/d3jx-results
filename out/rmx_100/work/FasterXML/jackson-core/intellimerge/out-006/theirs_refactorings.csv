@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.68;1506-1567;com.fasterxml.jackson.core.json.UTF8StreamJsonParser._parsePossibleNumber(boolean);1506-1567;com.fasterxml.jackson.core.json.UTF8StreamJsonParser._parseSignedNumber(boolean)
+Extract Method;method;0.55;2873-2899;com.fasterxml.jackson.core.json.UTF8StreamJsonParser._handleInvalidNumberStart(int, boolean);2878-2907;com.fasterxml.jackson.core.json.UTF8StreamJsonParser._handleInvalidNumberStart(int, boolean, boolean)

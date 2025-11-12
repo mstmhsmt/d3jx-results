@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.55;423-432;twitter4j.TwitterImpl.getFriendsList(String, long);429-439;twitter4j.TwitterImpl.getFriendsList(long, long, int)
+Extract Method;method;0.55;412-421;twitter4j.TwitterImpl.getFriendsList(long, long);429-439;twitter4j.TwitterImpl.getFriendsList(long, long, int)

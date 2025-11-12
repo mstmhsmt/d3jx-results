@@ -1,0 +1,155 @@
+package org.lflang;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.lflang.TargetProperty.BuildType;
+import org.lflang.TargetProperty.ClockSyncMode;
+import org.lflang.TargetProperty.CoordinationType;
+import org.lflang.TargetProperty.LogLevel;
+import org.lflang.TargetProperty.Platform;
+import org.lflang.TargetProperty.SchedulerOption;
+import org.lflang.generator.rust.RustTargetConfig;
+import java.util.Objects;
+
+public class TargetConfig {
+
+    public Set<TargetProperty> setByUser = new HashSet<>();
+
+    public List<String> buildCommands = new ArrayList<>();
+
+    public ClockSyncMode clockSync = ClockSyncMode.INIT;
+
+    public ClockSyncOptions clockSyncOptions = new ClockSyncOptions();
+
+    public BuildType cmakeBuildType = BuildType.RELEASE;
+
+    public boolean useCmake = true;
+
+    public List<String> cmakeIncludes = new ArrayList<>();
+
+    public List<String> cmakeIncludesWithoutPath = new ArrayList<>();
+
+    public String compiler = "";
+
+    public List<String> compileAdditionalSources = new ArrayList<>();
+
+    public Map<String, String> compileDefinitions = new HashMap<>();
+
+    public List<String> compileLibraries = new ArrayList<>();
+
+    public List<String> compilerFlags = new ArrayList<>();
+
+    public CoordinationType coordination = CoordinationType.CENTRALIZED;
+
+    public DockerOptions dockerOptions = null;
+
+    public CoordinationOptions coordinationOptions = new CoordinationOptions();
+
+    public String externalRuntimePath = null;
+
+    public boolean fastMode = false;
+
+    public List<String> fileNames = new ArrayList<>();
+
+    public List<String> filesNamesWithoutPath = new ArrayList<>();
+
+    public boolean keepalive = false;
+
+    public LogLevel logLevel = LogLevel.INFO;
+
+    public String linkerFlags = "";
+
+    public boolean noCompile = false;
+
+    public boolean noRuntimeValidation = false;
+
+    public Platform platform = Platform.AUTO;
+
+    public List<String> protoFiles = new ArrayList<>();
+
+    public boolean ros2 = false;
+
+    public String runtimeVersion = null;
+
+    public boolean singleFileProject = false;
+
+    public SchedulerOption schedulerType = SchedulerOption.getDefault();
+
+    public int workers = 0;
+
+    public boolean threading = true;
+
+    public TimeValue timeout;
+
+    public TracingOptions tracing = null;
+
+    public boolean exportDependencyGraph = false;
+
+    public boolean exportToYaml = false;
+
+    public final RustTargetConfig rust = new RustTargetConfig();
+
+    public static class ClockSyncOptions {
+
+        public int attenuation = 10;
+
+        public boolean collectStats = true;
+
+        public boolean localFederatesOn = false;
+
+        public TimeValue period = new TimeValue(5, TimeUnit.MILLI);
+
+        public int trials = 10;
+
+        public TimeValue testOffset;
+    }
+
+    public static class CoordinationOptions {
+
+        public TimeValue advance_message_interval = null;
+    }
+
+    public static class DockerOptions {
+
+        public String from = "alpine:latest";
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            DockerOptions that = (DockerOptions) o;
+            return from.equals(that.from);
+        }
+    }
+
+    public static class TracingOptions {
+
+        public String traceFileName = null;
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            TracingOptions that = (TracingOptions) o;
+            return Objects.equals(traceFileName, that.traceFileName);
+        }
+    }
+
+    public int baudRate = 9600;
+
+    public String fedSetupPreamble = null;
+
+    public List<String> ros2Dependencies = null;
+}

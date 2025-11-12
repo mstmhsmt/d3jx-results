@@ -1,0 +1,5 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.79;136-141;org.apache.cassandra.streaming.StreamReceiveTask.getTransaction();104-109;org.apache.cassandra.streaming.StreamReceiveTask.getReceiver()
+Inline Method;method;0.38;153-160;org.apache.cassandra.streaming.StreamReceiveTask.abort();282-285;org.apache.cassandra.streaming.StreamReceiveTask.abortTransaction()
+Change Field Signature;field;0.74;76-76;org.apache.cassandra.streaming.StreamReceiveTask.remoteSSTablesReceived;51-51;org.apache.cassandra.streaming.StreamReceiveTask.remoteStreamsReceived
+Change Constructor Signature;constructor;0.7;78-87;org.apache.cassandra.streaming.StreamReceiveTask.StreamReceiveTask(StreamSession, UUID, int, long);54-60;org.apache.cassandra.streaming.StreamReceiveTask.StreamReceiveTask(StreamSession, TableId, int, long)

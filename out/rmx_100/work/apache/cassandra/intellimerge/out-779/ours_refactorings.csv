@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.84;62-70;org.apache.cassandra.utils.btree.Path.ensureDepth(Object[]);63-72;org.apache.cassandra.utils.btree.Path.init(Object[])
+Change Constructor Signature;constructor;0.82;56-60;org.apache.cassandra.utils.btree.Path.Path(int);56-61;org.apache.cassandra.utils.btree.Path.Path(int, Object[])

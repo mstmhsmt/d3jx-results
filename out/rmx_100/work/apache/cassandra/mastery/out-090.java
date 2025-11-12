@@ -1,0 +1,321 @@
+package org.apache.cassandra.cql3.selection;
+
+import java.nio.ByteBuffer;
+import org.apache.cassandra.cql3.ColumnSpecification;
+import org.apache.cassandra.cql3.QueryOptions;
+import org.apache.cassandra.cql3.Term;
+import org.apache.cassandra.cql3.selection.SimpleSelector.SimpleSelectorFactory;
+import org.apache.cassandra.db.filter.ColumnFilter;
+import org.apache.cassandra.db.marshal.*;
+import org.apache.cassandra.db.rows.CellPath;
+import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.transport.ProtocolVersion;
+import org.apache.cassandra.utils.ByteBufferUtil;
+import java.io.IOException;
+import com.google.common.base.Objects;
+import org.apache.cassandra.db.TypeSizes;
+import org.apache.cassandra.io.util.DataInputPlus;
+import org.apache.cassandra.io.util.DataOutputPlus;
+import org.apache.cassandra.schema.TableMetadata;
+
+abstract class ElementsSelector extends Selector {
+
+    protected final Selector selected;
+
+    protected ElementsSelector(Kind kind, Selector selected) {
+        super(kind);
+        this.selected = selected;
+    }
+
+    private static boolean isUnset(ByteBuffer bb) {
+        return bb == ByteBufferUtil.UNSET_BYTE_BUFFER;
+    }
+
+    private static AbstractType<?> keyType(CollectionType<?> type) {
+        return type.nameComparator();
+    }
+
+    static public AbstractType<?> valueType(CollectionType<?> type) {
+        return type instanceof MapType ? type.valueComparator() : type.nameComparator();
+    }
+
+    private static abstract class AbstractFactory extends Factory {
+
+        protected final String name;
+
+        protected final Selector.Factory factory;
+
+        protected final CollectionType<?> type;
+
+        protected AbstractFactory(String name, Selector.Factory factory, CollectionType<?> type) {
+            this.name = name;
+            this.factory = factory;
+            this.type = type;
+        }
+
+        protected String getColumnName() {
+            return name;
+        }
+
+        protected void addColumnMapping(SelectionColumnMapping mapping, ColumnSpecification resultsColumn) {
+            factory.addColumnMapping(mapping, resultsColumn);
+        }
+
+        public boolean isAggregateSelectorFactory() {
+            return factory.isAggregateSelectorFactory();
+        }
+    }
+
+    static public Factory newElementFactory(String name, Selector.Factory factory, CollectionType<?> type, final Term key) {
+        return new AbstractFactory(name, factory, type) {
+
+            protected AbstractType<?> getReturnType() {
+                return valueType(type);
+            }
+
+            public Selector newInstance(QueryOptions options) throws InvalidRequestException {
+                ByteBuffer keyValue = key.bindAndGet(options);
+                if (keyValue == null)
+                    throw new InvalidRequestException("Invalid null value for element selection on " + factory.getColumnName());
+                if (keyValue == ByteBufferUtil.UNSET_BYTE_BUFFER)
+                    throw new InvalidRequestException("Invalid unset value for element selection on " + factory.getColumnName());
+                return new ElementSelector(factory.newInstance(options), keyValue);
+            }
+
+            public boolean areAllFetchedColumnsKnown() {
+                return factory.areAllFetchedColumnsKnown() && (!type.isMultiCell() || !factory.isSimpleSelectorFactory() || key.isTerminal());
+            }
+
+            public void addFetchedColumns(ColumnFilter.Builder builder) {
+                if (!type.isMultiCell() || !factory.isSimpleSelectorFactory()) {
+                    factory.addFetchedColumns(builder);
+                    return;
+                }
+                ColumnMetadata column = ((SimpleSelectorFactory) factory).getColumn();
+                builder.select(column, CellPath.create(((Term.Terminal) key).get(ProtocolVersion.V3)));
+            }
+        };
+    }
+
+    static public Factory newSliceFactory(String name, Selector.Factory factory, CollectionType<?> type, final Term from, final Term to) {
+        return new AbstractFactory(name, factory, type) {
+
+            protected AbstractType<?> getReturnType() {
+                return type;
+            }
+
+            public Selector newInstance(QueryOptions options) throws InvalidRequestException {
+                ByteBuffer fromValue = from.bindAndGet(options);
+                ByteBuffer toValue = to.bindAndGet(options);
+                if (fromValue == null || toValue == null)
+                    throw new InvalidRequestException("Invalid null value for slice selection on " + factory.getColumnName());
+                return new SliceSelector(factory.newInstance(options), from.bindAndGet(options), to.bindAndGet(options));
+            }
+
+            public boolean areAllFetchedColumnsKnown() {
+                return factory.areAllFetchedColumnsKnown() && (!type.isMultiCell() || !factory.isSimpleSelectorFactory() || (from.isTerminal() && to.isTerminal()));
+            }
+
+            public void addFetchedColumns(ColumnFilter.Builder builder) {
+                if (!type.isMultiCell() || !factory.isSimpleSelectorFactory()) {
+                    factory.addFetchedColumns(builder);
+                    return;
+                }
+                ColumnMetadata column = ((SimpleSelectorFactory) factory).getColumn();
+                ByteBuffer fromBB = ((Term.Terminal) from).get(ProtocolVersion.V3);
+                ByteBuffer toBB = ((Term.Terminal) to).get(ProtocolVersion.V3);
+                builder.slice(column, isUnset(fromBB) ? CellPath.BOTTOM : CellPath.create(fromBB), isUnset(toBB) ? CellPath.TOP : CellPath.create(toBB));
+            }
+        };
+    }
+
+    public ByteBuffer getOutput(ProtocolVersion protocolVersion) {
+        ByteBuffer value = selected.getOutput(protocolVersion);
+        return value == null ? null : extractSelection(value);
+    }
+
+    protected abstract ByteBuffer extractSelection(ByteBuffer collection);
+
+    public void addInput(ProtocolVersion protocolVersion, InputRow input) {
+        selected.addInput(protocolVersion, input);
+    }
+
+    public void reset() {
+        selected.reset();
+    }
+
+    static class ElementSelector extends ElementsSelector {
+
+        final private CollectionType<?> type;
+
+        final private ByteBuffer key;
+
+        private ElementSelector(Selector selected, ByteBuffer key) {
+            super(Kind.ELEMENT_SELECTOR, selected);
+            this.type = getCollectionType(selected);
+            this.key = key;
+        }
+
+        public void addFetchedColumns(ColumnFilter.Builder builder) {
+            if (type.isMultiCell() && selected instanceof SimpleSelector) {
+                ColumnMetadata column = ((SimpleSelector) selected).column;
+                builder.select(column, CellPath.create(key));
+            } else {
+                selected.addFetchedColumns(builder);
+            }
+        }
+
+        protected ByteBuffer extractSelection(ByteBuffer collection) {
+            return type.getSerializer().getSerializedValue(collection, key, keyType(type));
+        }
+
+        public AbstractType<?> getType() {
+            return valueType(type);
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[%s]", selected, keyType(type).getString(key));
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (!(o instanceof ElementSelector))
+                return false;
+            ElementSelector s = (ElementSelector) o;
+            return Objects.equal(selected, s.selected) && Objects.equal(key, s.key);
+        }
+
+        protected final static SelectorDeserializer deserializer = new SelectorDeserializer() {
+
+            protected Selector deserialize(DataInputPlus in, int version, TableMetadata metadata) throws IOException {
+                Selector selected = Selector.serializer.deserialize(in, version, metadata);
+                ByteBuffer key = ByteBufferUtil.readWithVIntLength(in);
+                return new ElementSelector(selected, key);
+            }
+        };
+
+        @Override
+        protected int serializedSize(int version) {
+            return TypeSizes.sizeofWithVIntLength(key) + serializer.serializedSize(selected, version);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(selected, key);
+        }
+
+        @Override
+        protected void serialize(DataOutputPlus out, int version) throws IOException {
+            serializer.serialize(selected, out, version);
+            ByteBufferUtil.serializedSizeWithVIntLength(key);
+        }
+    }
+
+    static class SliceSelector extends ElementsSelector {
+
+        final private CollectionType<?> type;
+
+        final private ByteBuffer from;
+
+        final private ByteBuffer to;
+
+        private SliceSelector(Selector selected, ByteBuffer from, ByteBuffer to) {
+            super(Kind.SLICE_SELECTOR, selected);
+            assert from != null && to != null : "We can have unset buffers, but not nulls";
+            this.type = getCollectionType(selected);
+            this.from = from;
+            this.to = to;
+        }
+
+        public void addFetchedColumns(ColumnFilter.Builder builder) {
+            if (type.isMultiCell() && selected instanceof SimpleSelector) {
+                ColumnMetadata column = ((SimpleSelector) selected).column;
+                builder.slice(column, isUnset(from) ? CellPath.BOTTOM : CellPath.create(from), isUnset(to) ? CellPath.TOP : CellPath.create(to));
+            } else {
+                selected.addFetchedColumns(builder);
+            }
+        }
+
+        protected ByteBuffer extractSelection(ByteBuffer collection) {
+            return type.getSerializer().getSliceFromSerialized(collection, from, to, type.nameComparator(), type.isFrozenCollection());
+        }
+
+        public AbstractType<?> getType() {
+            return type;
+        }
+
+        @Override
+        public String toString() {
+            boolean fromUnset = isUnset(from);
+            boolean toUnset = isUnset(to);
+            return fromUnset && toUnset ? selected.toString() : String.format("%s[%s..%s]", selected, fromUnset ? "" : keyType(type).getString(from), toUnset ? "" : keyType(type).getString(to));
+        }
+
+        @Override
+        protected int serializedSize(int version) {
+            int size = serializer.serializedSize(selected, version) + 2;
+            if (!isUnset(from))
+                size += TypeSizes.sizeofWithVIntLength(from);
+            if (!isUnset(to))
+                size += TypeSizes.sizeofWithVIntLength(to);
+            return size;
+        }
+
+        @Override
+        protected void serialize(DataOutputPlus out, int version) throws IOException {
+            serializer.serialize(selected, out, version);
+            boolean isFromUnset = isUnset(from);
+            out.writeBoolean(isFromUnset);
+            if (!isFromUnset)
+                ByteBufferUtil.serializedSizeWithVIntLength(from);
+            boolean isToUnset = isUnset(to);
+            out.writeBoolean(isToUnset);
+            if (!isToUnset)
+                ByteBufferUtil.serializedSizeWithVIntLength(to);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (!(o instanceof SliceSelector))
+                return false;
+            SliceSelector s = (SliceSelector) o;
+            return Objects.equal(selected, s.selected) && Objects.equal(from, s.from) && Objects.equal(to, s.to);
+        }
+
+        protected final static SelectorDeserializer deserializer = new SelectorDeserializer() {
+
+            protected Selector deserialize(DataInputPlus in, int version, TableMetadata metadata) throws IOException {
+                Selector selected = Selector.serializer.deserialize(in, version, metadata);
+                boolean isFromUnset = in.readBoolean();
+                ByteBuffer from = isFromUnset ? ByteBufferUtil.UNSET_BYTE_BUFFER : ByteBufferUtil.readWithVIntLength(in);
+                boolean isToUnset = in.readBoolean();
+                ByteBuffer to = isToUnset ? ByteBufferUtil.UNSET_BYTE_BUFFER : ByteBufferUtil.readWithVIntLength(in);
+                return new SliceSelector(selected, from, to);
+            }
+        };
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(selected, from, to);
+        }
+    }
+
+    private static CollectionType<?> getCollectionType(Selector selected) {
+        AbstractType<?> type = selected.getType();
+        if (type instanceof ReversedType)
+            type = ((ReversedType<?>) type).baseType;
+        assert type instanceof MapType || type instanceof SetType : "this shouldn't have passed validation in Selectable";
+        return (CollectionType<?>) type;
+    }
+
+    @Override
+    public boolean isTerminal() {
+        return selected.isTerminal();
+    }
+}

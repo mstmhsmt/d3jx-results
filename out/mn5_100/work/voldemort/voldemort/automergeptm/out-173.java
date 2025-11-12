@@ -1,0 +1,50 @@
+package voldemort.client.scheduler;
+import org.apache.log4j.Logger;
+import voldemort.client.ClientInfo;
+import voldemort.client.SystemStore;
+import voldemort.versioning.Version;
+import voldemort.versioning.Versioned;
+import voldemort.versioning.ObsoleteVersionException;
+
+public class ClientRegistryRefresher implements Runnable {
+  private final Logger logger = Logger.getLogger(this.getClass());
+
+  private final SystemStore<String, String> clientRegistry;
+
+  private ClientInfo clientInfo;
+
+  private final String clientId;
+
+  private Version lastVersion;
+
+  public ClientRegistryRefresher(SystemStore<String, String> clientRegistry, String clientId, ClientInfo clientInfo, Version version) {
+    this.clientRegistry = clientRegistry;
+    this.clientInfo = clientInfo;
+    this.clientId = clientId;
+    this.lastVersion = version;
+    this.hadConflict = false;
+    logger.info("Initial version obtained from client registry: " + version);
+  }
+
+  public void run() {
+    if (hadConflict) {
+      lastVersion = clientRegistry.getSysStore(clientId).getVersion();
+      hadConflict = false;
+    }
+    clientInfo.setUpdateTime(System.currentTimeMillis());
+    logger.info("updating client registry with the following info for client: " + clientId + "\n" + clientInfo);
+    try {
+      lastVersion = clientRegistry.putSysStore(clientId, new Versioned<String>(clientInfo.toString(), lastVersion));
+    } catch (ObsoleteVersionException e) {
+      Versioned<ClientInfo> existingValue = clientRegistry.getSysStore(clientId);
+      logger.warn("Multiple clients are updating the same client registry entry");
+      logger.warn("  current value: " + clientInfo + " " + lastVersion);
+      logger.warn("  existing value: " + existingValue.getValue() + " " + existingValue.getVersion());
+      hadConflict = true;
+    } catch (Exception e) {
+      logger.warn("encountered the following error while trying to update client registry: " + e);
+    }
+  }
+
+  private boolean hadConflict;
+}

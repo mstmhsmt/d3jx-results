@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.73;237-241;org.elasticsearch.search.aggregations.bucket.SignificantTermsSignificanceScoreIT.SimpleHeuristic.SimpleHeuristicParser.parse(XContentParser, ParseFieldMatcher);238-243;org.elasticsearch.search.aggregations.bucket.SignificantTermsSignificanceScoreIT.SimpleHeuristic.SimpleHeuristicParser.parse(XContentParser, ParseFieldMatcher, SearchContext)

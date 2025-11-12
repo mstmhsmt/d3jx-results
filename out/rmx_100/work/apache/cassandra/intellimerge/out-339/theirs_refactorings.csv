@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Extract Method;method;0.8;159-246;org.apache.cassandra.db.commitlog.AbstractCommitLogService.SyncRunnable.sync();229-265;org.apache.cassandra.db.commitlog.AbstractCommitLogService.SyncRunnable.maybeLogFlushLag(long, long)

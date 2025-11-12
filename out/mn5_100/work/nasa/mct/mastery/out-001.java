@@ -1,0 +1,214 @@
+package gov.nasa.arc.mct.defaults.view;
+
+import gov.nasa.arc.mct.components.AbstractComponent;
+import gov.nasa.arc.mct.gui.View;
+import gov.nasa.arc.mct.gui.ViewProvider;
+import gov.nasa.arc.mct.services.component.ViewInfo;
+import gov.nasa.arc.mct.services.component.ViewType;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.RenderingHints;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
+import java.util.Set;
+import javax.swing.BorderFactory;
+import javax.swing.Icon;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.ListCellRenderer;
+import javax.swing.UIManager;
+import javax.swing.plaf.basic.BasicComboBoxUI;
+import gov.nasa.arc.mct.util.MCTIcons;
+import javax.swing.ImageIcon;
+
+public class SwitcherView extends View {
+
+    private static final long serialVersionUID = -7338842560419381410L;
+
+    private ViewProvider managedView = null;
+
+    @SuppressWarnings("rawtypes")
+    private JComboBox comboBox;
+
+    private JLabel label;
+
+    private static final float FONT_SIZE = 10f;
+
+    static final public ViewInfo VIEW_INFO = new ViewInfo(SwitcherView.class, "Switcher", ViewType.VIEW_SWITCHER);
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    public SwitcherView(AbstractComponent ac, ViewInfo vi) {
+        Set<ViewInfo> viewInfoSet = ac.getViewInfos(ViewType.OBJECT);
+        ViewInfo[] viewInfos = viewInfoSet.toArray(new ViewInfo[viewInfoSet.size()]);
+        if (viewInfos.length > 1) {
+            comboBox = new JComboBox(viewInfos);
+            comboBox.setUI(new SwitcherComboBoxUI());
+            comboBox.setRenderer(viewInfoRenderer);
+            comboBox.addItemListener(itemListener);
+            comboBox.setVisible(false);
+            comboBox.setEnabled(false);
+            comboBox.setOpaque(false);
+            add(comboBox);
+        } else if (viewInfos.length == 1) {
+            label = new JLabel();
+            label.setIcon(getIcon(vi));
+            label.setText(vi.getViewName());
+            add(label);
+        } else {
+        }
+        setBorder(BorderFactory.createEmptyBorder(1, 4, 1, 2));
+        setOpaque(false);
+    }
+
+    @Override
+    public <T> void addMonitoredGUI(T gui) {
+        if (gui instanceof ViewProvider) {
+            managedView = (ViewProvider) gui;
+        }
+        if (managedView != null) {
+            resetSelection();
+            if (comboBox != null) {
+                comboBox.setVisible(true);
+                comboBox.setEnabled(true);
+            }
+        }
+        super.addMonitoredGUI(gui);
+    }
+
+    @Override
+    public void setForeground(Color fg) {
+        if (label != null) {
+            label.setForeground(fg);
+        }
+        super.setForeground(fg);
+    }
+
+    private void resetSelection() {
+        if (managedView != null) {
+            View housedView = managedView.getHousedViewManifestation();
+            if (housedView != null) {
+                ViewInfo vi = housedView.getInfo();
+                if (comboBox != null) {
+                    comboBox.removeItemListener(itemListener);
+                    comboBox.setSelectedItem(vi);
+                    comboBox.addItemListener(itemListener);
+                }
+                if (label != null) {
+                    label.setIcon(getIcon(vi));
+                    label.setText(vi.getViewName());
+                }
+            }
+        }
+    }
+
+    private final ItemListener itemListener = new ItemListener() {
+
+        @Override
+        public void itemStateChanged(ItemEvent e) {
+            if (managedView != null) {
+                Object item = e.getItem();
+                if (item != null && item instanceof ViewInfo) {
+                    if (!managedView.setHousedViewManifestation((ViewInfo) item)) {
+                        resetSelection();
+                    }
+                }
+            }
+        }
+    };
+
+    @SuppressWarnings("rawtypes")
+    private static final ListCellRenderer viewInfoRenderer = new ListCellRenderer() {
+
+        private JLabel label = new JLabel();
+
+        @Override
+        public Component getListCellRendererComponent(JList list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            label.setFont(label.getFont().deriveFont(FONT_SIZE));
+            if (value instanceof ViewInfo) {
+                ViewInfo vi = (ViewInfo) value;
+                label.setIcon(getIcon(vi));
+                label.setText(vi.getViewName());
+            } else {
+                label.setIcon(null);
+                label.setText("Error");
+            }
+            return label;
+        }
+    };
+
+    private static class SwitcherComboBoxUI extends BasicComboBoxUI {
+
+        @Override
+        protected JButton createArrowButton() {
+            JButton emptyButton = new JButton();
+            emptyButton.setIcon(ARROW_ICON);
+            emptyButton.setBorder(BorderFactory.createEmptyBorder());
+            emptyButton.setContentAreaFilled(false);
+            return emptyButton;
+        }
+
+        @Override
+        public Dimension getDisplaySize() {
+            Dimension d = super.getDisplaySize();
+            return new Dimension(d.width + 12, d.height);
+        }
+
+        @Override
+        public void paintCurrentValueBackground(Graphics g, Rectangle bounds, boolean hasFocus) {
+            if (hasFocus) {
+                if (g instanceof Graphics2D) {
+                    ((Graphics2D) g).setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                }
+                g.setColor(UIManager.getColor("Button.focus"));
+                g.drawRect(bounds.x + 2, bounds.y + 2, bounds.width - 8, bounds.height - 5);
+            }
+        }
+
+        @Override
+        public void paint(Graphics g, JComponent c) {
+            if (g instanceof Graphics2D) {
+                ((Graphics2D) g).setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            }
+            g.setColor(c.getBackground());
+            g.fillRoundRect(0, 1, c.getWidth() - 1, c.getHeight() - 2, 10, 10);
+            super.paint(g, c);
+        }
+    }
+
+    private static final Icon ARROW_ICON = new Icon() {
+
+        @Override
+        public int getIconWidth() {
+            return 12;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return 12;
+        }
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            int[] tx = { 3, 11, 7 };
+            int[] ty = { 6, 6, 10 };
+            if (g instanceof Graphics2D) {
+                ((Graphics2D) g).setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            }
+            g.setColor(Color.DARK_GRAY);
+            g.fillPolygon(tx, ty, 3);
+        }
+    };
+
+    private static final Color ICON_COLOR = new Color(144, 144, 144);
+
+    private static ImageIcon getIcon(ViewInfo vi) {
+        return MCTIcons.processIcon(vi.getAsset(ImageIcon.class), ICON_COLOR, false);
+    }
+}

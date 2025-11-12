@@ -1,0 +1,5 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.68;76-122;org.elasticsearch.painless.node.SEach.analyze(Variables);74-120;org.elasticsearch.painless.node.SEach.analyze(Locals)
+Change Method Signature;method;0.86;133-150;org.elasticsearch.painless.node.SEach.analyzeIterable(Variables, Type);131-148;org.elasticsearch.painless.node.SEach.analyzeIterable(Locals, Type)
+Change Method Signature;method;0.85;124-131;org.elasticsearch.painless.node.SEach.analyzeArray(Variables, Type);122-129;org.elasticsearch.painless.node.SEach.analyzeArray(Locals, Type)
+Change Constructor Signature;constructor;0.91;66-74;org.elasticsearch.painless.node.SEach.SEach(Location, int, String, String, AExpression, SBlock);65-72;org.elasticsearch.painless.node.SEach.SEach(Location, String, String, AExpression, SBlock)

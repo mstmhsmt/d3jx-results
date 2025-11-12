@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Inline Method;method;0.57;92-99;org.antlr.v4.codegen.Target.getTemplates();101-101;org.antlr.v4.codegen.Target.getVersion()

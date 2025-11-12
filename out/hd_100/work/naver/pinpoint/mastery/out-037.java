@@ -1,0 +1,31 @@
+package com.navercorp.pinpoint.plugin.spring.web;
+
+import java.security.ProtectionDomain;
+import com.navercorp.pinpoint.bootstrap.instrument.InstrumentClass;
+import com.navercorp.pinpoint.bootstrap.instrument.InstrumentException;
+import com.navercorp.pinpoint.bootstrap.instrument.Instrumentor;
+import com.navercorp.pinpoint.bootstrap.instrument.transformer.PinpointClassFileTransformer;
+import com.navercorp.pinpoint.bootstrap.interceptor.BasicMethodInterceptor;
+import com.navercorp.pinpoint.bootstrap.plugin.ProfilerPlugin;
+import com.navercorp.pinpoint.bootstrap.plugin.ProfilerPluginSetupContext;
+import com.navercorp.pinpoint.common.trace.ServiceType;
+import static com.navercorp.pinpoint.common.util.VarArgs.va;
+
+public class SpringWebMvcPlugin implements ProfilerPlugin {
+
+    public static final ServiceType SPRING_MVC = ServiceType.of(5051, "SPRING_MVC", "SPRING");
+
+    @Override
+    public void setup(ProfilerPluginSetupContext context) {
+        context.addClassFileTransformer("org.springframework.web.servlet.FrameworkServlet", new PinpointClassFileTransformer() {
+
+            @Override
+            public byte[] transform(Instrumentor instrumentContext, ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) throws InstrumentException {
+                InstrumentClass target = instrumentContext.getInstrumentClass(loader, className, classfileBuffer);
+                target.getDeclaredMethod("doGet", "javax.servlet.http.HttpServletRequest", "javax.servlet.http.HttpServletResponse").addInterceptor(BasicMethodInterceptor.class.getName(), va(SPRING_MVC));
+                target.getDeclaredMethod("doPost", "javax.servlet.http.HttpServletRequest", "javax.servlet.http.HttpServletResponse").addInterceptor(BasicMethodInterceptor.class.getName(), va(SPRING_MVC));
+                return target.toBytecode();
+            }
+        });
+    }
+}

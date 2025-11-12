@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.94;72-75;org.elasticsearch.plugin.discovery.gce.GceDiscoveryPlugin.nodeModules();72-75;org.elasticsearch.plugin.discovery.gce.GceDiscoveryPlugin.createGuiceModules()
+Change Method Signature;method;0.94;77-81;org.elasticsearch.plugin.discovery.gce.GceDiscoveryPlugin.nodeServices();77-81;org.elasticsearch.plugin.discovery.gce.GceDiscoveryPlugin.getGuiceServiceClasses()

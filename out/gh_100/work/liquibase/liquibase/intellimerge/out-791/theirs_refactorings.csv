@@ -1,0 +1,3 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.71;443-495;liquibase.changelog.DatabaseChangeLog.includeAll(String, boolean, IncludeAllFilter, boolean, Comparator, ResourceAccessor, ContextExpression);477-533;liquibase.changelog.DatabaseChangeLog.includeAll(String, boolean, IncludeAllFilter, boolean, Comparator, ResourceAccessor, ContextExpression, LabelExpression, boolean)
+Change Method Signature;method;0.64;497-559;liquibase.changelog.DatabaseChangeLog.include(String, boolean, ResourceAccessor, ContextExpression, boolean);535-604;liquibase.changelog.DatabaseChangeLog.include(String, boolean, ResourceAccessor, ContextExpression, LabelExpression, Boolean, boolean)

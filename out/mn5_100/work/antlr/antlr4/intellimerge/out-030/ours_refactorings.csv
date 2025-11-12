@@ -1,0 +1,2 @@
+refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
+Change Method Signature;method;0.96;545-550;org.antlr.v4.test.TestPerformance.DescriptiveErrorListener.error(Recognizer, T, int, int, String, RecognitionException);545-553;org.antlr.v4.test.TestPerformance.DescriptiveErrorListener.syntaxError(Recognizer, Object, int, int, String, RecognitionException)
