@@ -408,7 +408,7 @@ public class HandleDelegate extends JavacAnnotationHandler<Delegate> {
 		return binding.toString();
 	}
 
-	public static abstract enum DelegateReceiver {
+	public abstract static enum DelegateReceiver {
 
 		METHOD() {
 			public JCExpression get(final JavacNode node, final Name name) {

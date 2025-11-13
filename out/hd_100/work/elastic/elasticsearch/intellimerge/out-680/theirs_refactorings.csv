@@ -1,5 +1,5 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
 Change Method Signature;method;0.85;388-409;org.elasticsearch.messy.tests.QueryRescorerTests.assertEquivalentOrSubstringMatch(String, SearchResponse, SearchResponse);378-399;org.elasticsearch.search.functionscore.QueryRescorerIT.assertEquivalentOrSubstringMatch(String, SearchResponse, SearchResponse)
-Change Method Signature;method;0.84;366-386;org.elasticsearch.messy.tests.QueryRescorerTests.assertEquivalent(String, SearchResponse, SearchResponse);356-376;org.elasticsearch.search.functionscore.QueryRescorerIT.assertEquivalent(String, SearchResponse, SearchResponse)
 Change Method Signature;method;0.81;69-100;org.elasticsearch.messy.tests.QueryRescorerTests.testEnforceWindowSize();59-90;org.elasticsearch.search.functionscore.QueryRescorerIT.testEnforceWindowSize()
+Change Method Signature;method;0.84;366-386;org.elasticsearch.messy.tests.QueryRescorerTests.assertEquivalent(String, SearchResponse, SearchResponse);356-376;org.elasticsearch.search.functionscore.QueryRescorerIT.assertEquivalent(String, SearchResponse, SearchResponse)
 Change Field Signature;field;1.0;354-364;org.elasticsearch.messy.tests.QueryRescorerTests.searchHitsComparator;344-354;org.elasticsearch.search.functionscore.QueryRescorerIT.searchHitsComparator

@@ -1,3 +1,3 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
-Change Method Signature;method;0.77;68-71;org.apache.cassandra.transport.Dispatcher.dispatch(Channel, Message.Request, FlushItemConverter);82-87;org.apache.cassandra.transport.Dispatcher.dispatch(Channel, Message.Request, FlushItemConverter, Overload)
 Change Method Signature;method;0.63;76-92;org.apache.cassandra.transport.Dispatcher.processRequest(ServerConnection, Message.Request);388-412;org.apache.cassandra.transport.Dispatcher.processRequest(Channel, Message.Request, Overload, RequestTime)
+Change Method Signature;method;0.77;68-71;org.apache.cassandra.transport.Dispatcher.dispatch(Channel, Message.Request, FlushItemConverter);82-87;org.apache.cassandra.transport.Dispatcher.dispatch(Channel, Message.Request, FlushItemConverter, Overload)

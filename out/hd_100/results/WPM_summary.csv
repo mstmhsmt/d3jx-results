@@ -1,0 +1,14 @@
+project,mc,git-merge,imediff,jfstmerge,jdime,automergeptm,intellimerge,spork,mergiraf,mastery,d3j,repo
+apache/storm,10,10,8,9,10,8,4,8,10,10,10,10
+jenkinsci/jenkins,12,12,10,12,12,11,2,9,12,12,12,12
+spring-projects/spring-boot,21,21,20,15,21,20,6,20,21,21,21,21
+google/ExoPlayer,5,5,5,4,5,5,3,4,5,5,5,5
+elastic/elasticsearch,26,26,21,18,26,25,7,25,26,25,26,26
+apereo/cas,13,12,12,9,13,13,5,13,13,12,13,13
+junit-team/junit4,4,3,3,3,4,4,1,2,4,4,4,4
+xetorthio/jedis,3,3,3,3,3,2,0,2,3,3,3,3
+baomidou/mybatis-plus,1,1,1,1,1,1,1,0,1,1,1,1
+skylot/jadx,2,2,2,1,2,2,0,1,2,2,2,2
+SeleniumHQ/selenium,1,1,1,1,1,1,1,1,1,1,1,1
+dropwizard/dropwizard,1,1,1,1,0,0,0,1,1,1,1,1
+naver/pinpoint,1,1,1,1,1,1,1,1,1,1,1,1

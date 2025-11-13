@@ -1,0 +1,5 @@
+project,mc,git-merge,imediff,jfstmerge,jdime,automergeptm,intellimerge,spork,mergiraf,mastery,d3j
+sample/sample,2,0,0,0,0,0,1,2,0,0,1
+bad/broken,1,1,1,1,1,1,1,1,1,0,1
+sample/twitter4j,1,0,0,1,1,1,1,0,0,1,0
+bad/bad,1,0,1,0,1,1,0,1,1,0,1

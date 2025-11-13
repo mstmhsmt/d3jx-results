@@ -1,4 +1,4 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
-Change Method Signature;method;0.78;38-45;cpw.mods.fml.client.GuiModItemsMissing.func_146284_a(GuiButton);38-45;cpw.mods.fml.client.GuiModItemsMissing.actionPerformed(GuiButton)
 Change Method Signature;method;0.75;46-57;cpw.mods.fml.client.GuiModItemsMissing.func_73863_a(int, int, float);46-57;cpw.mods.fml.client.GuiModItemsMissing.drawScreen(int, int, float)
+Change Method Signature;method;0.78;38-45;cpw.mods.fml.client.GuiModItemsMissing.func_146284_a(GuiButton);38-45;cpw.mods.fml.client.GuiModItemsMissing.actionPerformed(GuiButton)
 Change Method Signature;method;0.7;31-36;cpw.mods.fml.client.GuiModItemsMissing.func_73866_w_();31-36;cpw.mods.fml.client.GuiModItemsMissing.initGui()

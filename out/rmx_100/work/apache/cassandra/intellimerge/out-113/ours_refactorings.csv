@@ -2,16 +2,16 @@ refactoring_type;node_type;confidence;before_location;before_node;after_location
 Change Type Signature;class;0.65;193-211;org.apache.cassandra.utils.memory.BufferPool.Debug;480-704;org.apache.cassandra.utils.memory.BufferPool.MicroQueueOfChunks
 Change Method Signature;method;0.66;784-790;org.apache.cassandra.utils.memory.BufferPool.Chunk.get(int, int);1322-1329;org.apache.cassandra.utils.memory.BufferPool.Chunk.set(int, int, ByteBuffer)
 Change Method Signature;method;0.83;353-361;org.apache.cassandra.utils.memory.BufferPool.LocalPool.addChunkFromGlobalPool();950-958;org.apache.cassandra.utils.memory.BufferPool.LocalPool.addChunkFromParent()
-Change Method Signature;method;0.79;668-676;org.apache.cassandra.utils.memory.BufferPool.Chunk.reset();1414-1422;org.apache.cassandra.utils.memory.BufferPool.Chunk.unsafeFree()
 Change Method Signature;method;0.82;164-168;org.apache.cassandra.utils.memory.BufferPool.currentChunk();1494-1498;org.apache.cassandra.utils.memory.BufferPool.unsafeCurrentChunk()
+Change Method Signature;method;0.79;668-676;org.apache.cassandra.utils.memory.BufferPool.Chunk.reset();1414-1422;org.apache.cassandra.utils.memory.BufferPool.Chunk.unsafeFree()
 Change Method Signature;method;0.63;110-115;org.apache.cassandra.utils.memory.BufferPool.allocate(int, boolean);213-219;org.apache.cassandra.utils.memory.BufferPool.allocate(int, BufferType)
 Change Method Signature;method;0.8;850-854;org.apache.cassandra.utils.memory.BufferPool.roundUpNormal(int);1455-1461;org.apache.cassandra.utils.memory.BufferPool.roundUp(int)
 Inline Method;method;0.6;754-769;org.apache.cassandra.utils.memory.BufferPool.LocalPool.put(ByteBuffer);440-456;org.apache.cassandra.utils.memory.BufferPool.LocalPool.removeFromLocalQueue(Chunk)
 Inline Method;method;0.58;203-206;org.apache.cassandra.utils.memory.BufferPool.tryGet(int);129-148;org.apache.cassandra.utils.memory.BufferPool.maybeTakeFromPool(int, boolean)
 Inline Method;method;0.18;186-192;org.apache.cassandra.utils.memory.BufferPool.get(int, BufferType);117-127;org.apache.cassandra.utils.memory.BufferPool.takeFromPool(int, boolean)
-Change Field Signature;field;0.69;500-500;org.apache.cassandra.utils.memory.BufferPool.EXEC;165-165;org.apache.cassandra.utils.memory.BufferPool.localPoolCleaner
-Change Field Signature;field;0.64;53-53;org.apache.cassandra.utils.memory.BufferPool.CHUNK_SIZE;109-109;org.apache.cassandra.utils.memory.BufferPool.NORMAL_CHUNK_SIZE
+Change Field Signature;field;0.85;243-243;org.apache.cassandra.utils.memory.BufferPool.GlobalPool.memoryUsage;139-139;org.apache.cassandra.utils.memory.BufferPool.memoryAllocated
 Change Field Signature;field;0.79;239-239;org.apache.cassandra.utils.memory.BufferPool.GlobalPool.debug;119-119;org.apache.cassandra.utils.memory.BufferPool.debug
 Change Field Signature;field;0.87;196-196;org.apache.cassandra.utils.memory.BufferPool.Debug.allChunks;350-350;org.apache.cassandra.utils.memory.BufferPool.GlobalPool.partiallyFreedChunks
-Change Field Signature;field;0.85;243-243;org.apache.cassandra.utils.memory.BufferPool.GlobalPool.memoryUsage;139-139;org.apache.cassandra.utils.memory.BufferPool.memoryAllocated
+Change Field Signature;field;0.69;500-500;org.apache.cassandra.utils.memory.BufferPool.EXEC;165-165;org.apache.cassandra.utils.memory.BufferPool.localPoolCleaner
 Change Field Signature;field;0.91;337-337;org.apache.cassandra.utils.memory.BufferPool.LocalPool.metrics;122-122;org.apache.cassandra.utils.memory.BufferPool.metrics
+Change Field Signature;field;0.64;53-53;org.apache.cassandra.utils.memory.BufferPool.CHUNK_SIZE;109-109;org.apache.cassandra.utils.memory.BufferPool.NORMAL_CHUNK_SIZE

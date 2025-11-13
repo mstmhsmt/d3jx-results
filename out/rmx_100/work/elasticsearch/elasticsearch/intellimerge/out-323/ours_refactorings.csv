@@ -1,5 +1,5 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
-Change Method Signature;method;0.9;72-84;org.elasticsearch.index.query.GeohashCellQuery.create(QueryParseContext, GeoPointFieldMapper.GeoPointFieldType, String, List);77-89;org.elasticsearch.index.query.GeohashCellQuery.create(QueryShardContext, GeoPointFieldMapper.GeoPointFieldType, String, List)
-Change Method Signature;method;0.81;151-154;org.elasticsearch.index.query.GeohashCellQuery.Builder.field(String);169-172;org.elasticsearch.index.query.GeohashCellQuery.Builder.fieldName(String)
 Change Method Signature;method;0.64;182-265;org.elasticsearch.index.query.GeohashCellQuery.Parser.parse(QueryParseContext);292-366;org.elasticsearch.index.query.GeohashCellQuery.Parser.fromXContent(QueryParseContext)
+Change Method Signature;method;0.81;151-154;org.elasticsearch.index.query.GeohashCellQuery.Builder.field(String);169-172;org.elasticsearch.index.query.GeohashCellQuery.Builder.fieldName(String)
+Change Method Signature;method;0.9;72-84;org.elasticsearch.index.query.GeohashCellQuery.create(QueryParseContext, GeoPointFieldMapper.GeoPointFieldType, String, List);77-89;org.elasticsearch.index.query.GeohashCellQuery.create(QueryShardContext, GeoPointFieldMapper.GeoPointFieldType, String, List)
 Change Field Signature;field;0.77;96-96;org.elasticsearch.index.query.GeohashCellQuery.Builder.field;101-101;org.elasticsearch.index.query.GeohashCellQuery.Builder.fieldName

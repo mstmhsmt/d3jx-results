@@ -341,7 +341,7 @@ public class InternalClusterService extends AbstractLifecycleComponent<ClusterSe
         return true;
     }
 
-    static abstract class SourcePrioritizedRunnable extends PrioritizedRunnable {
+    abstract static class SourcePrioritizedRunnable extends PrioritizedRunnable {
         protected final String source;
 
         public SourcePrioritizedRunnable(Priority priority, String source) {

@@ -7,29 +7,29 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <title>DiffViewer</title>
-<link rel="stylesheet" type="text/css" href="/js/codemirror/lib/codemirror.css"></link>
-<link rel="stylesheet" type="text/css" href="/js/codemirror/addon/dialog/dialog.css"></link>
-<link rel="stylesheet" type="text/css" href="/js/dv/diffviewer.css"></link>
-<link rel="stylesheet" type="text/css" href="/js/dv/dv.css"/>
-<script type="text/javascript" src="/js/jquery.min.js"></script>
-<script type="text/javascript" src="/js/codemirror/lib/codemirror.js"></script>
-<script type="text/javascript" src="/js/codemirror/addon/scroll/simplescrollbars.js"></script>
-<script type="text/javascript" src="/js/codemirror/addon/scroll/annotatescrollbar.js"></script>
-<script type="text/javascript" src="/js/codemirror/addon/dialog/dialog.js"></script>
-<script type="text/javascript" src="/js/codemirror/addon/search/searchcursor.js"></script>
-<script type="text/javascript" src="/js/codemirror/addon/search/search.js"></script>
-<script type="text/javascript" src="/js/codemirror/addon/fold/foldcode.js"></script>
-<script type="text/javascript" src="/js/codemirror/addon/fold/foldgutter.js"></script>
-<script type="text/javascript" src="/js/codemirror/addon/fold/brace-fold.js"></script>
-<script type="text/javascript" src="/js/codemirror/addon/fold/comment-fold.js"></script>
-<script type="text/javascript" src="/js/codemirror/addon/fold/indent-fold.js"></script>
-<script type="text/javascript" src="/js/codemirror/mode/python/python.js"></script>
-<script type="text/javascript" src="/js/codemirror/mode/verilog/verilog.js"></script>
-<script type="text/javascript" src="/js/codemirror/mode/clike/clike.js"></script>
-<script type="text/javascript" src="/js/common.js"></script>
+<link rel="stylesheet" type="text/css" href="../../../../../js/codemirror/lib/codemirror.css"></link>
+<link rel="stylesheet" type="text/css" href="../../../../../js/codemirror/addon/dialog/dialog.css"></link>
+<link rel="stylesheet" type="text/css" href="../../../../../js/dv/diffviewer.css"></link>
+<link rel="stylesheet" type="text/css" href="../../../../../js/dv/dv.css"/>
+<script type="text/javascript" src="../../../../../js/jquery.min.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/lib/codemirror.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/addon/scroll/simplescrollbars.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/addon/scroll/annotatescrollbar.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/addon/dialog/dialog.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/addon/search/searchcursor.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/addon/search/search.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/addon/fold/foldcode.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/addon/fold/foldgutter.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/addon/fold/brace-fold.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/addon/fold/comment-fold.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/addon/fold/indent-fold.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/mode/python/python.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/mode/verilog/verilog.js"></script>
+<script type="text/javascript" src="../../../../../js/codemirror/mode/clike/clike.js"></script>
+<script type="text/javascript" src="../../../../../js/common.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
-<script type="text/javascript" src="/js/dv/diffviewer3.js"></script>
-<script type="text/javascript" src="/js/dv/dv.js"></script>
+<script type="text/javascript" src="../../../../../js/dv/diffviewer3.js"></script>
+<script type="text/javascript" src="../../../../../js/dv/dv.js"></script>
 <script type="text/javascript">
 var dv = new DiffViewer();
 </script>
@@ -66,9 +66,9 @@ var dv = new DiffViewer();
 
 <script type="text/javascript">
 $(document).ready(function(){
-var url0 = "/commits-rmx_100/antlr/antlr4/019ea15e3f1f87b402fbcb23d17299a419e87e14/ParseListener-73c1168.java";
-var url1 = "/commits-rmx_100/antlr/antlr4/fce18b2f8f10209ff47af6f7d4d8616943cfea64/ParseListener-3b48355.java";
-var urld = "/out/rmx_100/work/CACHE/3d/3d85bd4ed72c930ef42b580c40beeb77-36555d322e77c4d86a2b95a3be4f0449/ForkPoolWorker-10/diff.json";
+var url0 = "../../../../../commits-rmx_100/antlr/antlr4/019ea15e3f1f87b402fbcb23d17299a419e87e14/ParseListener-73c1168.java";
+var url1 = "../../../../../commits-rmx_100/antlr/antlr4/fce18b2f8f10209ff47af6f7d4d8616943cfea64/ParseListener-3b48355.java";
+var urld = "../../../../../out/rmx_100/work/CACHE/3d/3d85bd4ed72c930ef42b580c40beeb77-36555d322e77c4d86a2b95a3be4f0449/ForkPoolWorker-10/diff.json";
 var lang = getLang(url0);
 var view = document.getElementById("view");
 dv.dts = 1;

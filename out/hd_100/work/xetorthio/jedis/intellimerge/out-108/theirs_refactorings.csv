@@ -1,7 +1,7 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
-Change Method Signature;method;0.81;233-236;redis.clients.jedis.BinaryShardedJedis.sadd(byte[], byte[]);233-236;redis.clients.jedis.BinaryShardedJedis.sadd(byte[], byte[][])
-Change Method Signature;method;0.81;183-186;redis.clients.jedis.BinaryShardedJedis.rpush(byte[], byte[]);183-186;redis.clients.jedis.BinaryShardedJedis.rpush(byte[], byte[][])
 Change Method Signature;method;0.81;243-246;redis.clients.jedis.BinaryShardedJedis.srem(byte[], byte[]);243-246;redis.clients.jedis.BinaryShardedJedis.srem(byte[], byte[][])
+Change Method Signature;method;0.81;233-236;redis.clients.jedis.BinaryShardedJedis.sadd(byte[], byte[]);233-236;redis.clients.jedis.BinaryShardedJedis.sadd(byte[], byte[][])
 Change Method Signature;method;0.81;188-191;redis.clients.jedis.BinaryShardedJedis.lpush(byte[], byte[]);188-191;redis.clients.jedis.BinaryShardedJedis.lpush(byte[], byte[][])
 Change Method Signature;method;0.81;158-161;redis.clients.jedis.BinaryShardedJedis.hdel(byte[], byte[]);158-161;redis.clients.jedis.BinaryShardedJedis.hdel(byte[], byte[][])
+Change Method Signature;method;0.81;183-186;redis.clients.jedis.BinaryShardedJedis.rpush(byte[], byte[]);183-186;redis.clients.jedis.BinaryShardedJedis.rpush(byte[], byte[][])
 Change Method Signature;method;0.81;278-281;redis.clients.jedis.BinaryShardedJedis.zrem(byte[], byte[]);283-286;redis.clients.jedis.BinaryShardedJedis.zrem(byte[], byte[][])

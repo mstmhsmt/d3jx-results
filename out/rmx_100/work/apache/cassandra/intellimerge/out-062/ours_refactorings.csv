@@ -1,7 +1,7 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
 Change Method Signature;method;0.67;5065-5091;org.apache.cassandra.service.StorageService.unbootstrap(Runnable);5318-5354;org.apache.cassandra.service.StorageService.unbootstrap()
-Extract Method;method;0.54;6280-6285;org.apache.cassandra.service.StorageService.setColumnIndexSize(int);6603-6616;org.apache.cassandra.service.StorageService.setColumnIndexSizeInKiB(int)
 Extract Method;method;0.73;4309-4331;org.apache.cassandra.service.StorageService.clearSnapshot(String, String[]);4458-4507;org.apache.cassandra.service.StorageService.clearSnapshot(Map, String, String[])
 Extract Method;method;0.82;1364-1511;org.apache.cassandra.service.StorageService.rebuild(String, String, String, String);1420-1576;org.apache.cassandra.service.StorageService.rebuild(String, String, String, String, boolean)
-Extract Method;method;0.65;6101-6134;org.apache.cassandra.service.StorageService.samplePartitions(int, int, int, List);6384-6418;org.apache.cassandra.service.StorageService.samplePartitions(String, int, int, int, List)
 Extract Method;method;0.3;3944-3954;org.apache.cassandra.service.StorageService.scrub(boolean, boolean, boolean, boolean, int, String, String[]);4061-4073;org.apache.cassandra.service.StorageService.scrub(boolean, IScrubber.Options, int, String, String[])
+Extract Method;method;0.65;6101-6134;org.apache.cassandra.service.StorageService.samplePartitions(int, int, int, List);6384-6418;org.apache.cassandra.service.StorageService.samplePartitions(String, int, int, int, List)
+Extract Method;method;0.54;6280-6285;org.apache.cassandra.service.StorageService.setColumnIndexSize(int);6603-6616;org.apache.cassandra.service.StorageService.setColumnIndexSizeInKiB(int)

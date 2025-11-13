@@ -1,7 +1,7 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
 Change Method Signature;method;0.87;3834-3844;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.getTokenLocation();4144-4154;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.currentTokenLocation()
-Change Method Signature;method;0.79;238-241;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.getInputSource();183-186;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.streamReadInputSource()
-Change Method Signature;method;0.97;3847-3854;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.getCurrentLocation();4157-4164;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.currentLocation()
 Change Method Signature;method;0.67;1028-1143;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.nextFieldName();892-1005;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.nextName()
 Change Method Signature;method;0.69;942-1026;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.nextFieldName(SerializableString);1007-1091;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.nextName(SerializableString)
+Change Method Signature;method;0.97;3847-3854;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.getCurrentLocation();4157-4164;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.currentLocation()
+Change Method Signature;method;0.79;238-241;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.getInputSource();183-186;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.streamReadInputSource()
 Change Constructor Signature;constructor;0.82;185-201;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.UTF8StreamJsonParser(IOContext, int, InputStream, ObjectCodec, ByteQuadsCanonicalizer, byte[], int, int, int, boolean);140-157;com.fasterxml.jackson.core.json.UTF8StreamJsonParser.UTF8StreamJsonParser(ObjectReadContext, IOContext, int, int, InputStream, ByteQuadsCanonicalizer, byte[], int, int, int, boolean)

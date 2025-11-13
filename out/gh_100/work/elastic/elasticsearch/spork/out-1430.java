@@ -636,7 +636,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent imple
         }
     }
 
-    public static abstract interface Shard {
+    public abstract static interface Shard {
         /**
          * Returns the shard id of this shard.
          */
@@ -703,7 +703,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent imple
         void removeShard(int shardId, String message);
     }
 
-    public static abstract interface AllocatedIndices<T extends Shard, U extends AllocatedIndex<T>> extends Iterable<U> {
+    public abstract static interface AllocatedIndices<T extends Shard, U extends AllocatedIndex<T>> extends Iterable<U> {
         /**
          * Creates a new {@link IndexService} for the given metadata.
          * @param indexMetaData the index metadata to create the index for

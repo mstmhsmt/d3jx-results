@@ -1,8 +1,8 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
 Inline Method;method;0.73;219-267;backtype.storm.messaging.netty.Client.send(Iterator);436-439;backtype.storm.messaging.netty.Client.handleMessagesWhenConnectionIsUnavailable(Iterator)
 Inline Method;method;0.74;219-267;backtype.storm.messaging.netty.Client.send(Iterator);210-212;backtype.storm.messaging.netty.Client.pauseBackgroundFlushing()
+Inline Method;method;0.72;311-336;backtype.storm.messaging.netty.Client.flushMessages(Channel, MessageBatch);503-505;backtype.storm.messaging.netty.Client.containsMessages(MessageBatch)
 Inline Method;method;1.0;369-389;backtype.storm.messaging.netty.Client.waitForPendingMessagesToBeSent();241-243;backtype.storm.messaging.netty.Client.nowMillis()
 Inline Method;method;0.75;219-267;backtype.storm.messaging.netty.Client.send(Iterator);214-216;backtype.storm.messaging.netty.Client.resumeBackgroundFlushing()
-Inline Method;method;0.72;311-336;backtype.storm.messaging.netty.Client.flushMessages(Channel, MessageBatch);503-505;backtype.storm.messaging.netty.Client.containsMessages(MessageBatch)
 Change Field Signature;field;1.0;593-593;backtype.storm.messaging.netty.Client.Connector.address;456-456;backtype.storm.messaging.netty.Client.Connect.address
 Change Constructor Signature;constructor;0.77;152-179;backtype.storm.messaging.netty.Client.Client(Map, ChannelFactory, ScheduledExecutorService, String, int, Context);123-143;backtype.storm.messaging.netty.Client.Client(Map, ChannelFactory, HashedWheelTimer, String, int)

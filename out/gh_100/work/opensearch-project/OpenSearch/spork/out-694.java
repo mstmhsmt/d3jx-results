@@ -2338,7 +2338,7 @@ public class IndexShardTests extends IndexShardTestCase {
     /**
      * A dummy repository for testing which just needs restore overridden
      */
-    private abstract static class RestoreOnlyRepository extends AbstractLifecycleComponent implements Repository {
+    private static abstract class RestoreOnlyRepository extends AbstractLifecycleComponent implements Repository {
         private final String indexName;
 
         RestoreOnlyRepository(String indexName) {

@@ -728,7 +728,7 @@ public class Translog extends AbstractIndexShardComponent implements IndexShardC
      * A generic interface representing an operation performed on the transaction log.
      * Each is associated with a type.
      */
-    public static abstract interface Operation extends Writeable {
+    public abstract static interface Operation extends Writeable {
         enum Type {
 
             @Deprecated

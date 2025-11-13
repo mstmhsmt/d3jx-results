@@ -1,7 +1,7 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
 Change Type Signature;class;0.67;286-298;org.apache.cassandra.net.OutboundTcpConnection.Entry;389-406;org.apache.cassandra.net.OutboundTcpConnection.QueuedMessage
-Change Method Signature;method;0.67;152-172;org.apache.cassandra.net.OutboundTcpConnection.writeConnected(Message, String);173-221;org.apache.cassandra.net.OutboundTcpConnection.writeConnected(QueuedMessage)
 Change Method Signature;method;0.9;70-81;org.apache.cassandra.net.OutboundTcpConnection.enqueue(Message, String);80-91;org.apache.cassandra.net.OutboundTcpConnection.enqueue(MessageOut, String)
-Change Field Signature;field;0.8;288-288;org.apache.cassandra.net.OutboundTcpConnection.Entry.message;391-391;org.apache.cassandra.net.OutboundTcpConnection.QueuedMessage.message
-Change Field Signature;field;1.0;290-290;org.apache.cassandra.net.OutboundTcpConnection.Entry.timestamp;393-393;org.apache.cassandra.net.OutboundTcpConnection.QueuedMessage.timestamp
+Change Method Signature;method;0.67;152-172;org.apache.cassandra.net.OutboundTcpConnection.writeConnected(Message, String);173-221;org.apache.cassandra.net.OutboundTcpConnection.writeConnected(QueuedMessage)
 Change Field Signature;field;1.0;289-289;org.apache.cassandra.net.OutboundTcpConnection.Entry.id;392-392;org.apache.cassandra.net.OutboundTcpConnection.QueuedMessage.id
+Change Field Signature;field;1.0;290-290;org.apache.cassandra.net.OutboundTcpConnection.Entry.timestamp;393-393;org.apache.cassandra.net.OutboundTcpConnection.QueuedMessage.timestamp
+Change Field Signature;field;0.8;288-288;org.apache.cassandra.net.OutboundTcpConnection.Entry.message;391-391;org.apache.cassandra.net.OutboundTcpConnection.QueuedMessage.message

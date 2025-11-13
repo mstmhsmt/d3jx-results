@@ -164,7 +164,7 @@ public abstract class Run<JobT extends Job<JobT, RunT>, RunT extends Run<JobT, R
      * if the computation determines that everything earlier than this build is already completed.
      */
     /* does not compile on JDK 7: private */
-    transient volatile RunT previousBuildInProgress;
+    volatile transient RunT previousBuildInProgress;
 
     /**
      * When the build is scheduled.
@@ -248,7 +248,7 @@ public abstract class Run<JobT extends Job<JobT, RunT>, RunT extends Run<JobT, R
      * If the build is in progress, remember {@link RunExecution} that's running it.
      * This field is not persisted.
      */
-    private transient volatile RunExecution runner;
+    private volatile transient RunExecution runner;
 
     /**
      * {@link ArtifactManager#id} of the artifact manager associated with this build, if any.
@@ -1007,7 +1007,7 @@ public abstract class Run<JobT extends Job<JobT, RunT>, RunT extends Run<JobT, R
      * @since TODO
      */
     @Nonnull
-    public final synchronized ArtifactManager pickArtifactManager() throws IOException {
+    public synchronized final ArtifactManager pickArtifactManager() throws IOException {
         ExtensionList<ArtifactManager> managers = Jenkins.getInstance().getExtensionList(ArtifactManager.class);
         if (artifactManager != null) {
             return getArtifactManager();

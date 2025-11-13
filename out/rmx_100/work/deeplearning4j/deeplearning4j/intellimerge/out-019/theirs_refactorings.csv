@@ -1,4 +1,4 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
-Change Method Signature;method;0.97;283-288;org.deeplearning4j.models.word2vec.wordstore.inmemory.AbstractCache.setCountForDoc(String, int);284-289;org.deeplearning4j.models.word2vec.wordstore.inmemory.AbstractCache.setCountForDoc(String, long)
-Change Method Signature;method;0.96;311-314;org.deeplearning4j.models.word2vec.wordstore.inmemory.AbstractCache.incrementTotalDocCount(int);312-315;org.deeplearning4j.models.word2vec.wordstore.inmemory.AbstractCache.incrementTotalDocCount(long)
 Change Method Signature;method;0.97;268-273;org.deeplearning4j.models.word2vec.wordstore.inmemory.AbstractCache.incrementDocCount(String, int);269-274;org.deeplearning4j.models.word2vec.wordstore.inmemory.AbstractCache.incrementDocCount(String, long)
+Change Method Signature;method;0.96;311-314;org.deeplearning4j.models.word2vec.wordstore.inmemory.AbstractCache.incrementTotalDocCount(int);312-315;org.deeplearning4j.models.word2vec.wordstore.inmemory.AbstractCache.incrementTotalDocCount(long)
+Change Method Signature;method;0.97;283-288;org.deeplearning4j.models.word2vec.wordstore.inmemory.AbstractCache.setCountForDoc(String, int);284-289;org.deeplearning4j.models.word2vec.wordstore.inmemory.AbstractCache.setCountForDoc(String, long)

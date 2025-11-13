@@ -1,5 +1,5 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
-Change Method Signature;method;0.91;32-36;org.jasig.cas.authentication.principal.SimplePrincipalTests.testProperId();32-36;org.jasig.cas.authentication.principal.SimplePrincipalTests.verifyProperId()
-Change Method Signature;method;0.91;48-52;org.jasig.cas.authentication.principal.SimplePrincipalTests.testEquals();48-52;org.jasig.cas.authentication.principal.SimplePrincipalTests.verifyEquals()
 Change Method Signature;method;0.94;43-46;org.jasig.cas.authentication.principal.SimplePrincipalTests.testEqualsWithBadClass();43-46;org.jasig.cas.authentication.principal.SimplePrincipalTests.verifyEqualsWithBadClass()
 Change Method Signature;method;0.93;38-41;org.jasig.cas.authentication.principal.SimplePrincipalTests.testEqualsWithNull();38-41;org.jasig.cas.authentication.principal.SimplePrincipalTests.verifyEqualsWithNull()
+Change Method Signature;method;0.91;32-36;org.jasig.cas.authentication.principal.SimplePrincipalTests.testProperId();32-36;org.jasig.cas.authentication.principal.SimplePrincipalTests.verifyProperId()
+Change Method Signature;method;0.91;48-52;org.jasig.cas.authentication.principal.SimplePrincipalTests.testEquals();48-52;org.jasig.cas.authentication.principal.SimplePrincipalTests.verifyEquals()

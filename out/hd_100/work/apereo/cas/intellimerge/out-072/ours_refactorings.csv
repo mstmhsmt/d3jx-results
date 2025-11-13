@@ -1,12 +1,12 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
 Change Type Signature;class;0.69;27-78;org.jasig.cas.support.openid.OpenIdConstants;27-78;org.jasig.cas.support.openid.OpenIdProtocolConstants
-Change Field Signature;field;1.0;52-52;org.jasig.cas.support.openid.OpenIdConstants.OPENID_IDENTITY;52-52;org.jasig.cas.support.openid.OpenIdProtocolConstants.OPENID_IDENTITY
 Change Field Signature;field;1.0;57-57;org.jasig.cas.support.openid.OpenIdConstants.OPENID_SIG;57-57;org.jasig.cas.support.openid.OpenIdProtocolConstants.OPENID_SIG
-Change Field Signature;field;1.0;62-62;org.jasig.cas.support.openid.OpenIdConstants.OPENID_IDENTIFIERSELECT;62-62;org.jasig.cas.support.openid.OpenIdProtocolConstants.OPENID_IDENTIFIERSELECT
-Change Field Signature;field;1.0;37-37;org.jasig.cas.support.openid.OpenIdConstants.OPENID_ASSOCHANDLE;37-37;org.jasig.cas.support.openid.OpenIdProtocolConstants.OPENID_ASSOCHANDLE
-Change Field Signature;field;1.0;42-42;org.jasig.cas.support.openid.OpenIdConstants.OPENID_MODE;42-42;org.jasig.cas.support.openid.OpenIdProtocolConstants.OPENID_MODE
-Change Field Signature;field;1.0;47-47;org.jasig.cas.support.openid.OpenIdConstants.CANCEL;47-47;org.jasig.cas.support.openid.OpenIdProtocolConstants.CANCEL
 Change Field Signature;field;1.0;67-67;org.jasig.cas.support.openid.OpenIdConstants.OPENID_LOCALID;67-67;org.jasig.cas.support.openid.OpenIdProtocolConstants.OPENID_LOCALID
-Change Field Signature;field;1.0;72-72;org.jasig.cas.support.openid.OpenIdConstants.ASSOCIATE;72-72;org.jasig.cas.support.openid.OpenIdProtocolConstants.ASSOCIATE
+Change Field Signature;field;1.0;42-42;org.jasig.cas.support.openid.OpenIdConstants.OPENID_MODE;42-42;org.jasig.cas.support.openid.OpenIdProtocolConstants.OPENID_MODE
 Change Field Signature;field;1.0;32-32;org.jasig.cas.support.openid.OpenIdConstants.OPENID_RETURNTO;32-32;org.jasig.cas.support.openid.OpenIdProtocolConstants.OPENID_RETURNTO
+Change Field Signature;field;1.0;72-72;org.jasig.cas.support.openid.OpenIdConstants.ASSOCIATE;72-72;org.jasig.cas.support.openid.OpenIdProtocolConstants.ASSOCIATE
+Change Field Signature;field;1.0;47-47;org.jasig.cas.support.openid.OpenIdConstants.CANCEL;47-47;org.jasig.cas.support.openid.OpenIdProtocolConstants.CANCEL
+Change Field Signature;field;1.0;37-37;org.jasig.cas.support.openid.OpenIdConstants.OPENID_ASSOCHANDLE;37-37;org.jasig.cas.support.openid.OpenIdProtocolConstants.OPENID_ASSOCHANDLE
+Change Field Signature;field;1.0;62-62;org.jasig.cas.support.openid.OpenIdConstants.OPENID_IDENTIFIERSELECT;62-62;org.jasig.cas.support.openid.OpenIdProtocolConstants.OPENID_IDENTIFIERSELECT
+Change Field Signature;field;1.0;52-52;org.jasig.cas.support.openid.OpenIdConstants.OPENID_IDENTITY;52-52;org.jasig.cas.support.openid.OpenIdProtocolConstants.OPENID_IDENTITY
 Change Constructor Signature;constructor;0.65;77-77;org.jasig.cas.support.openid.OpenIdConstants.OpenIdConstants();77-77;org.jasig.cas.support.openid.OpenIdProtocolConstants.OpenIdProtocolConstants()

@@ -1,6 +1,6 @@
 refactoring_type;node_type;confidence;before_location;before_node;after_location;after_node
 Change Method Signature;method;0.67;588-633;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.apply(TransformOp, int[]);376-454;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.doTransformOp(TransformOp)
 Inline Method;method;0.37;82-100;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.exec(Op);537-582;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.apply(TransformOp, int[], int[])
+Extract Method;method;0.46;75-231;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.exec(Op);457-503;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.doAccumulationOp(Accumulation)
 Extract Method;method;0.47;75-231;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.exec(Op);538-588;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.doIndexAccumulationOp(IndexAccumulation)
 Extract Method;method;0.46;75-231;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.exec(Op);505-536;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.doScalarOp(ScalarOp)
-Extract Method;method;0.46;75-231;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.exec(Op);457-503;org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner.doAccumulationOp(Accumulation)

@@ -226,7 +226,7 @@ public class SelectStatement implements CQLStatement {
     }
 
     // Simple wrapper class to avoid some code duplication
-    private abstract static class Pager {
+    private static abstract class Pager {
         protected QueryPager pager;
 
         protected Pager(QueryPager pager) {
@@ -1002,7 +1002,7 @@ orderingColumns
         }
     }
 
-    private abstract static class ColumnComparator<T> implements Comparator<T> {
+    private static abstract class ColumnComparator<T> implements Comparator<T> {
         protected final int compare(Comparator<ByteBuffer> comparator, ByteBuffer aValue, ByteBuffer bValue) {
             if (aValue == null) {
                 return bValue == null ? 0 : -1;
